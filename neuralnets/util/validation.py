@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from neuralnets.util.io import imwrite3D
+from neuralnets.util.io import write_volume
 from neuralnets.util.metrics import jaccard, dice, accuracy_metrics, hausdorff_distance
 from neuralnets.util.tools import gaussian_window
 
@@ -217,7 +217,7 @@ def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_fi
     h = hausdorff_distance(segmentation, labels)[0]
     if write_dir is not None:
         print('[%s] Writing the output' % (datetime.datetime.now()))
-        imwrite3D(segmentation, write_dir, rescale=True)
+        write_volume(255*segmentation, write_dir)
     if writer is not None:
         z = data.shape[0] // 2
         N = 1024
