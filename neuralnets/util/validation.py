@@ -217,7 +217,7 @@ def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_fi
     h = hausdorff_distance(segmentation, labels)[0]
     if write_dir is not None:
         print('[%s] Writing the output' % (datetime.datetime.now()))
-        write_volume(255*segmentation, write_dir)
+        write_volume(255*segmentation, write_dir, type='pngseq')
     if writer is not None:
         z = data.shape[0] // 2
         N = 1024
