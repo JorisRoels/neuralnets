@@ -121,7 +121,7 @@ class UNetDecoder2D(nn.Module):
 class UNet2D(nn.Module):
 
     def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance',
-                 activation='relu', dropout_enc=0.0, dropout_dec=0.0):
+                 activation='relu', dropout_enc=0.0, dropout_dec=0.0, bnd_weight_map=False):
         super(UNet2D, self).__init__()
 
         self.in_channels = in_channels
@@ -129,6 +129,7 @@ class UNet2D(nn.Module):
         self.feature_maps = feature_maps
         self.levels = levels
         self.norm = norm
+        self.bnd_weight_map = bnd_weight_map
 
         # contractive path
         self.encoder = UNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
@@ -198,7 +199,10 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            weight = boundary_weight_map(y)
+            if self.bnd_weight_map:
+                weight = boundary_weight_map(y)
+            else:
+                weight = None
             loss = loss_fn(y_pred, y, weight=weight)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
@@ -276,7 +280,10 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            weight = boundary_weight_map(y)
+            if self.bnd_weight_map:
+                weight = boundary_weight_map(y)
+            else:
+                weight = None
             loss = loss_fn(y_pred, y, weight=weight)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1

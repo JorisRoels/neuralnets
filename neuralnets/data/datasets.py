@@ -25,9 +25,6 @@ class VolumeDataset(data.Dataset):
                 F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                               mode='area')[0, 0, ...].numpy()
 
-        # normalize data
-        self.data = self.data / 255
-
     def __getitem__(self, i):
         pass
 
@@ -60,16 +57,10 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
         self.mu, self.std = self.get_stats()
 
-        # normalize labels
-        self.labels = np.asarray(self.labels / 255, dtype='uint8')
-
     def __getitem__(self, i):
 
         # get random sample
         input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # make sure the targets are binary
-        target = np.asarray(target > 0.5, dtype='uint8')
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
@@ -114,11 +105,9 @@ class MultiVolumeDataset(data.Dataset):
             if scaling is not None:
                 target_size = np.asarray(np.multiply(data.shape, scaling[k]), dtype=int)
                 data = \
-                F.interpolate(torch.Tensor(data[np.newaxis, np.newaxis, ...]), size=tuple(target_size), mode='area')[
-                    0, 0, ...].numpy()
-
-            # normalize data
-            data = data/255
+                    F.interpolate(torch.Tensor(data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
+                                  mode='area')[
+                        0, 0, ...].numpy()
 
             self.data.append(data)
 
@@ -155,11 +144,9 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
             if scaling is not None:
                 target_size = np.asarray(np.multiply(labels.shape, scaling[k]), dtype=int)
                 labels = \
-                F.interpolate(torch.Tensor(labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size), mode='area')[
-                    0, 0, ...].numpy()
-
-            # normalize labels
-            labels = np.asarray(labels / 255, dtype='uint8')
+                    F.interpolate(torch.Tensor(labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
+                                  mode='area')[
+                        0, 0, ...].numpy()
 
             self.labels.append(labels)
 

@@ -42,6 +42,7 @@ parser.add_argument("--levels", help="Number of levels in the segmentation U-Net
 parser.add_argument("--dropout", help="Dropout", type=float, default=0.0)
 parser.add_argument("--norm", help="Normalization in the network (batch or instance)", type=str, default="instance")
 parser.add_argument("--activation", help="Non-linear activations in the network", type=str, default="relu")
+parser.add_argument("--bnd_weight_map", help="Use boundary weights during training", type=bool, default=True)
 
 # optimization parameters
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
@@ -82,6 +83,10 @@ train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/traini
 test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/testing.tif'),
                                     os.path.join(args.data_dir, 'EM/EPFL/testing_groundtruth.tif'),
                                     input_shape=input_shape, len_epoch=args.len_epoch)
+train.data = train.data / 255
+test.data = test.data / 255
+train.labels = train.labels / 255
+test.labels = test.labels / 255
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.train_batch_size)
 
@@ -90,7 +95,7 @@ test_loader = DataLoader(test, batch_size=args.train_batch_size)
 """
 print('[%s] Building the network' % (datetime.datetime.now()))
 net = UNet2D(feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout, dropout_dec=args.dropout,
-             norm=args.norm, activation=args.activation)
+             norm=args.norm, activation=args.activation, bnd_weight_map=args.bnd_weight_map)
 
 """
     Setup optimization for training
