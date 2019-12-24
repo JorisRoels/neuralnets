@@ -44,7 +44,7 @@ class VolumeDataset(data.Dataset):
 class StronglyLabeledVolumeDataset(VolumeDataset):
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d'):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch)
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
 
         self.label_path = label_path
 
@@ -80,8 +80,8 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
 class UnlabeledVolumeDataset(VolumeDataset):
 
-    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch)
+    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d'):
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
 
         self.mu, self.std = self.get_stats()
 
@@ -142,7 +142,7 @@ class MultiVolumeDataset(data.Dataset):
 class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d']):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch)
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types)
 
         self.label_path = label_path
 
@@ -185,8 +185,8 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
 class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
 
-    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch)
+    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d'):
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types)
 
         self.mu, self.std = self.get_stats()
 
