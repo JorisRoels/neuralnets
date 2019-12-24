@@ -3,20 +3,20 @@ import torch
 import torch.nn.functional as F
 import torch.utils.data as data
 
-from neuralnets.util.io import read_tif
+from neuralnets.util.io import read_volume
 from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input
 
 
 class VolumeDataset(data.Dataset):
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000):
+    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d'):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
         self.len_epoch = len_epoch
 
         # load the data
-        self.data = read_tif(data_path)
+        self.data = read_volume(data_path, type=type)
 
         # rescale the dataset if necessary
         if scaling is not None:
@@ -43,13 +43,13 @@ class VolumeDataset(data.Dataset):
 
 class StronglyLabeledVolumeDataset(VolumeDataset):
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000):
+    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch)
 
         self.label_path = label_path
 
         # load labels
-        self.labels = read_tif(label_path)
+        self.labels = read_volume(label_path, type=type)
 
         # rescale the dataset if necessary
         if scaling is not None:
@@ -99,7 +99,7 @@ class UnlabeledVolumeDataset(VolumeDataset):
 
 class MultiVolumeDataset(data.Dataset):
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000):
+    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d']):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
@@ -108,7 +108,7 @@ class MultiVolumeDataset(data.Dataset):
         # load the data
         self.data = []
         for k, path in enumerate(data_path):
-            data = read_tif(path)
+            data = read_volume(path, type=types[k])
 
             # rescale the dataset if necessary
             if scaling is not None:
@@ -141,7 +141,7 @@ class MultiVolumeDataset(data.Dataset):
 
 class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000):
+    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d']):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch)
 
         self.label_path = label_path
@@ -149,7 +149,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
         # load the data
         self.labels = []
         for k, path in enumerate(label_path):
-            labels = read_tif(path)
+            labels = read_volume(path, type=types[k])
 
             # rescale the dataset if necessary
             if scaling is not None:
