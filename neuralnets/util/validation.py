@@ -4,18 +4,20 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
+from progress.bar import Bar
 
 from neuralnets.util.io import write_volume
 from neuralnets.util.metrics import jaccard, dice, accuracy_metrics, hausdorff_distance
 from neuralnets.util.tools import gaussian_window
 
 
-def sliding_window_multichannel(image, step_size, window_size):
+def sliding_window_multichannel(image, step_size, window_size, track_progress=False):
     """
     Iterator that acts as a sliding window over a multichannel 3D image
     :param image: multichannel image (4D array)
     :param step_size: step size of the sliding window (3-tuple)
     :param window_size: size of the window (3-tuple)
+    :param track_progress: optionally, for tracking progress with progress bar
     """
 
     # define range
@@ -33,6 +35,8 @@ def sliding_window_multichannel(image, step_size, window_size):
     xrange[-1] = image.shape[3] - window_size[2]
 
     # loop over the range
+    if track_progress:
+        bar = Bar('Progress', max=len(zrange) * len(yrange) * len(xrange))
     for z in zrange:
         for y in yrange:
             for x in xrange:
@@ -42,9 +46,13 @@ def sliding_window_multichannel(image, step_size, window_size):
                     yield (z, y, x, image[:, z, y:y + window_size[1], x:x + window_size[2]])
                 else:  # 3D
                     yield (z, y, x, image[:, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]])
+                if track_progress:
+                    bar.next()
+    if track_progress:
+        bar.finish()
 
 
-def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, train=False):
+def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False):
     """
     Segment a multichannel 3D image using a specific network
     :param data: 4D array (C, Z, Y, X) representing the multichannel 3D image
@@ -53,6 +61,7 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
     :param batch_size: batch size for processing
     :param step_size: step size of the sliding window
     :param train: evaluate the network in training mode
+    :param track_progress: optionally, for tracking progress with progress bar
     :return: the segmented image
     """
 
@@ -90,9 +99,11 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
 
     # define sliding window
     if is2d:
-        sw = sliding_window_multichannel(data, step_size=step_size, window_size=(1, input_shape[0], input_shape[1]))
+        sw = sliding_window_multichannel(data, step_size=step_size, window_size=(1, input_shape[0], input_shape[1]),
+                                         track_progress=track_progress)
     else:
-        sw = sliding_window_multichannel(data, step_size=step_size, window_size=input_shape)
+        sw = sliding_window_multichannel(data, step_size=step_size, window_size=input_shape,
+                                         track_progress=track_progress)
 
     # start prediction
     batch_counter = 0
@@ -173,7 +184,7 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
     return segmentation
 
 
-def segment(data, net, input_shape, batch_size=1, step_size=None, train=False):
+def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False):
     """
     Segment a 3D image using a specific network
     :param data: 3D array (Z, Y, X) representing the 3D image
@@ -182,15 +193,16 @@ def segment(data, net, input_shape, batch_size=1, step_size=None, train=False):
     :param batch_size: batch size for processing
     :param step_size: step size of the sliding window
     :param train: evaluate the network in training mode
+    :param track_progress: optionally, for tracking progress with progress bar
     :return: the segmented image
     """
 
     return segment_multichannel(data[np.newaxis, ...], net, input_shape,
-                                batch_size=batch_size, step_size=step_size, train=train)
+                                batch_size=batch_size, step_size=step_size, train=train, track_progress=track_progress)
 
 
 def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_file=None,
-             writer=None, epoch=0):
+             writer=None, epoch=0, track_progress=False):
     """
     Validate a network on a dataset and its labels
     :param net: image-to-image segmentation network
@@ -202,6 +214,7 @@ def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_fi
     :param val_file: optionally, specify a file to write the validation results
     :param writer: optionally, summary writer for logging to tensorboard
     :param epoch: optionally, current epoch for logging to tensorboard
+    :param track_progress: optionally, for tracking progress with progress bar
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
@@ -210,14 +223,14 @@ def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_fi
     if write_dir is not None and not os.path.exists(write_dir):
         os.mkdir(write_dir)
 
-    segmentation = segment(data, net, input_size, batch_size=batch_size)
+    segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress)
     j = jaccard(segmentation, labels)
     d = dice(segmentation, labels)
     a, p, r, f = accuracy_metrics(segmentation, labels)
     h = hausdorff_distance(segmentation, labels)[0]
     if write_dir is not None:
         print('[%s] Writing the output' % (datetime.datetime.now()))
-        write_volume(255*segmentation, write_dir, type='pngseq')
+        write_volume(255 * segmentation, write_dir, type='pngseq')
     if writer is not None:
         z = data.shape[0] // 2
         N = 1024
