@@ -7,6 +7,86 @@ from neuralnets.util.io import read_volume
 from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input
 
 
+class StandardDataset(data.Dataset):
+
+    def __init__(self, data_path, scaling=None, type='tif3d'):
+        self.data_path = data_path
+        self.scaling = scaling
+
+        # load the data
+        self.data = read_volume(data_path, type=type)
+
+        # rescale the dataset if necessary
+        if scaling is not None:
+            target_size = np.asarray(np.multiply(self.data.shape, scaling), dtype=int)
+            self.data = \
+                F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
+                              mode='area')[0, 0, ...].numpy()
+
+    def __getitem__(self, i):
+        pass
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def get_stats(self):
+        mu = np.mean(self.data)
+        std = np.std(self.data)
+
+        return mu, std
+
+
+class StronglyLabeledStandardDataset(StandardDataset):
+
+    def __init__(self, data_path, label_path, scaling=None, type='tif3d'):
+        super().__init__(data_path, scaling=scaling, type=type)
+
+        self.label_path = label_path
+
+        # load labels
+        self.labels = read_volume(label_path, type=type)
+
+        # rescale the dataset if necessary
+        if scaling is not None:
+            target_size = np.asarray(np.multiply(self.labels.shape, scaling), dtype=int)
+            self.labels = \
+                F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
+                              mode='area')[0, 0, ...].numpy()
+
+        self.mu, self.std = self.get_stats()
+
+    def __getitem__(self, i):
+
+        # get random sample
+        input = self.data[i]
+        target = self.labels[i]
+
+        if input.shape[0] > 1:
+            # add channel axis if the data is 3D
+            return input[np.newaxis, ...], target[np.newaxis, ...]
+        else:
+            return input, target
+
+
+class UnlabeledStandardDataset(StandardDataset):
+
+    def __init__(self, data_path, scaling=None, type='tif3d'):
+        super().__init__(data_path, scaling=scaling, type=type)
+
+        self.mu, self.std = self.get_stats()
+
+    def __getitem__(self, i):
+
+        # get random sample
+        input = self.data[i]
+
+        if input.shape[0] > 1:
+            # add channel axis if the data is 3D
+            return input[np.newaxis, ...]
+        else:
+            return input
+
+
 class VolumeDataset(data.Dataset):
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d'):
