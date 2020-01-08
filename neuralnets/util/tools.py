@@ -5,13 +5,17 @@ import numpy as np
 import torch
 from skimage.color import label2rgb
 
+from neuralnets.util.io import read_volume
 
-def sample_labeled_input(data, labels, input_shape):
+
+def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq'):
     """
     Generate an input and target sample of certain shape from a labeled dataset
-    :param data: data to sample from
-    :param labels: labels to sample from
+    :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
+    :param labels: labels to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param input_shape: shape of the sample
+    :param preloaded: boolean that specifies whether the data is already in RAM
+    :param type: type of the dataset that should be loaded in RAM (only necessary if preloaded==False)
     :return: a random sample
     """
     # randomize seed
@@ -23,20 +27,27 @@ def sample_labeled_input(data, labels, input_shape):
     z = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
 
     # extract input and target patch
-    input = data[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
-    target = labels[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
+    if preloaded:  # if preloaded, we can simply load it from RAM
+        input = data[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
+        target = labels[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
+    else:  # if not preloaded, we have to additionally load it in RAM
+        input = read_volume(data, type=type, start=z, stop=z + input_shape[2])
+        target = read_volume(labels, type=type, start=z, stop=z + input_shape[2])
+        input = input[x:x + input_shape[0], y:y + input_shape[1], :]
+        target = target[x:x + input_shape[0], y:y + input_shape[1], :]
 
     return copy.copy(input), copy.copy(target)
 
 
-def sample_unlabeled_input(data, input_shape):
+def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq'):
     """
-    Generate an input and target sample of certain shape from an unlabeled dataset
-    :param data: data to sample from
+    Generate an input sample of certain shape from an unlabeled dataset
+    :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param input_shape: shape of the sample
+    :param preloaded: boolean that specifies whether the data is already in RAM
+    :param type: type of the dataset that should be loaded in RAM (only necessary if preloaded==False)
     :return: a random sample
     """
-
     # randomize seed
     np.random.seed()
 
@@ -46,7 +57,11 @@ def sample_unlabeled_input(data, input_shape):
     z = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
 
     # extract input and target patch
-    input = data[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
+    if preloaded:  # if preloaded, we can simply load it from RAM
+        input = data[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
+    else:  # if not preloaded, we have to additionally load it in RAM
+        input = read_volume(data, type=type, start=z, stop=z + input_shape[2])
+        input = input[x:x + input_shape[0], y:y + input_shape[1], :]
 
     return copy.copy(input)
 
