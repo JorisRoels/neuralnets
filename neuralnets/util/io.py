@@ -62,7 +62,7 @@ def read_tifseq(dir, dtype='uint8', start=0, stop=-1):
         stop = len(files)
     data = np.zeros((stop - start, sz[0], sz[1]), dtype=dtype)
     for i in range(start, stop):
-        data[i] = tiff.imread(os.path.join(dir, files[i]))
+        data[i-start] = tiff.imread(os.path.join(dir, files[i]))
 
     return data
 
@@ -110,7 +110,7 @@ def read_pngseq(dir, dtype='uint8', start=0, stop=-1):
         stop = len(files)
     data = np.zeros((stop - start, sz[0], sz[1]), dtype=dtype)
     for i in range(start, stop):
-        data[i] = cv2.imread(os.path.join(dir, files[i]), cv2.IMREAD_GRAYSCALE).astype(dtype)
+        data[i-start] = cv2.imread(os.path.join(dir, files[i]), cv2.IMREAD_GRAYSCALE).astype(dtype)
 
     return data
 
