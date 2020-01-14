@@ -8,7 +8,7 @@ from skimage.color import label2rgb
 from neuralnets.util.io import read_volume
 
 
-def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq'):
+def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq', data_shape=None):
     """
     Generate an input and target sample of certain shape from a labeled dataset
     :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
@@ -16,21 +16,27 @@ def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq
     :param input_shape: shape of the sample
     :param preloaded: boolean that specifies whether the data is already in RAM
     :param type: type of the dataset that should be loaded in RAM (only necessary if preloaded==False)
+    :param data_shape: shape of the dataset to sample from (only necessary if preloaded==False)
     :return: a random sample
     """
     # randomize seed
     np.random.seed()
 
-    # generate random position
-    x = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
-    y = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
-    z = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
-
     # extract input and target patch
     if preloaded:  # if preloaded, we can simply load it from RAM
+        # generate random position
+        x = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
+        y = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
+        z = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
+
         input = data[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
         target = labels[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
     else:  # if not preloaded, we have to additionally load it in RAM
+        # generate random position
+        x = np.random.randint(0, data_shape[0] - input_shape[0] + 1)
+        y = np.random.randint(0, data_shape[1] - input_shape[1] + 1)
+        z = np.random.randint(0, data_shape[2] - input_shape[2] + 1)
+
         input = read_volume(data, type=type, start=z, stop=z + input_shape[2])
         target = read_volume(labels, type=type, start=z, stop=z + input_shape[2])
         input = input[x:x + input_shape[0], y:y + input_shape[1], :]
@@ -39,27 +45,33 @@ def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq
     return copy.copy(input), copy.copy(target)
 
 
-def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq'):
+def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', data_shape=None):
     """
     Generate an input sample of certain shape from an unlabeled dataset
     :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param input_shape: shape of the sample
     :param preloaded: boolean that specifies whether the data is already in RAM
     :param type: type of the dataset that should be loaded in RAM (only necessary if preloaded==False)
+    :param data_shape: shape of the dataset to sample from (only necessary if preloaded==False)
     :return: a random sample
     """
     # randomize seed
     np.random.seed()
 
-    # generate random position
-    x = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
-    y = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
-    z = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
-
     # extract input and target patch
     if preloaded:  # if preloaded, we can simply load it from RAM
+        # generate random position
+        x = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
+        y = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
+        z = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
+
         input = data[x:x + input_shape[0], y:y + input_shape[1], z:z + input_shape[2]]
     else:  # if not preloaded, we have to additionally load it in RAM
+        # generate random position
+        x = np.random.randint(0, data_shape[0] - input_shape[0] + 1)
+        y = np.random.randint(0, data_shape[1] - input_shape[1] + 1)
+        z = np.random.randint(0, data_shape[2] - input_shape[2] + 1)
+
         input = read_volume(data, type=type, start=z, stop=z + input_shape[2])
         input = input[x:x + input_shape[0], y:y + input_shape[1], :]
 
