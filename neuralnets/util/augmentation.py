@@ -363,31 +363,12 @@ class FlipY_3D(object):
 
 class Rotate90_2D(object):
 
-    def __init__(self, shape, prob=1, cuda=True):
+    def __init__(self, prob=1):
         """
         Rotate the inputs by 90 degree angles
-        :param shape: 2D shape of the input input image
         :param prob: probability of rotating
-        :param cuda: specify whether the inputs are on the GPU
         """
-        self.shape = tuple(shape)
         self.prob = prob
-        self.cuda = cuda
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        grids = []
-        for m in range(4):
-            xv, yv = np.meshgrid(i, j)
-            xv = np.rot90(xv, m + 1).copy()
-            yv = np.rot90(yv, m + 1).copy()
-
-            grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-            grid = grid.unsqueeze(0)
-            if cuda:
-                grid = grid.cuda()
-            grids.append(grid)
-        self.grids = grids
 
     def __call__(self, x):
         """
@@ -397,43 +378,27 @@ class Rotate90_2D(object):
         """
 
         if rnd.rand() < self.prob:
-            grid = self.grids[rnd.randint(0, 4)].repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
+            r = rnd.randint(0, 4)
+            if r == 0:
+                return x.transpose(2, 3)  # 90 degree rotation
+            elif r == 1:
+                return x.flip(2)  # 180 degree rotation
+            elif r == 2:
+                return x.transpose(2, 3).flip(3)  # 270 degree rotation
+            else:
+                return x  # 0 degree rotation
         else:
             return x
 
 
 class Rotate90_3D(object):
 
-    def __init__(self, shape, prob=1, cuda=True):
+    def __init__(self, prob=1):
         """
         Rotate the inputs by 90 degree angles
-        :param shape: 3D shape of the input input image
         :param prob: probability of rotating
-        :param cuda: specify whether the inputs are on the GPU
         """
-        self.shape = shape
         self.prob = prob
-        self.cuda = cuda
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        k = np.linspace(-1, 1, shape[2])
-        grids = []
-        for m in range(4):
-            xv, yv, zv = np.meshgrid(i, j, k)
-            xv = np.rot90(xv, m + 1).copy()
-            yv = np.rot90(yv, m + 1).copy()
-            zv = np.rot90(zv, m + 1).copy()
-
-            grid = torch.cat(
-                (torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1), torch.Tensor(zv).unsqueeze(-1)),
-                dim=-1)
-            grid = grid.unsqueeze(0)
-            if cuda:
-                grid = grid.cuda()
-            grids.append(grid)
-        self.grids = grids
 
     def __call__(self, x):
         """
@@ -443,8 +408,15 @@ class Rotate90_3D(object):
         """
 
         if rnd.rand() < self.prob:
-            grid = self.grids[rnd.randint(0, 4)].repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
+            r = rnd.randint(0, 4)
+            if r == 0:
+                return x.transpose(3, 4)  # 90 degree rotation
+            elif r == 1:
+                return x.flip(3)  # 180 degree rotation
+            elif r == 2:
+                return x.transpose(3, 4).flip(4)  # 270 degree rotation
+            else:
+                return x  # 0 degree rotation
         else:
             return x
 
