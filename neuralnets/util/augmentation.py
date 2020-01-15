@@ -164,204 +164,76 @@ class Scale(object):
         return F.interpolate(x, scale_factor=scale_factor, mode=self.mode, align_corners=False)
 
 
-class RandomCrop_2D(object):
+class FlipX(object):
 
-    def __init__(self, crop_shape):
-        """
-        Selects a random crop from the input
-        :param crop_shape: 2D shape of the crop
-        """
-        self.crop_shape = crop_shape
-
-    def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Y , X)
-        :return: output tensor (B, C, Y', X')
-        """
-        r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
-        c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
-        return x[:, :, r:r + self.crop_shape[0], c:c + self.crop_shape[1]]
-
-
-class RandomCrop_3D(object):
-
-    def __init__(self, crop_shape):
-        """
-        Selects a random crop from the input
-        :param crop_shape: 3D shape of the crop
-        """
-        self.crop_shape = crop_shape
-
-    def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Z , Y , X)
-        :return: output tensor (B, C, Z', Y', X')
-        """
-        r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
-        c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
-        z = np.random.randint(0, x.size(4) - self.crop_shape[2] + 1)
-        return x[:, :, r:r + self.crop_shape[0], c:c + self.crop_shape[1], z:z + self.crop_shape[2]]
-
-
-class FlipX_2D(object):
-
-    def __init__(self, shape, prob=1, cuda=True):
+    def __init__(self, prob=1):
         """
         Perform a flip along the X axis
-        :param shape: 2D shape of the input image
         :param prob: probability of flipping
-        :param cuda: specify whether the inputs are on the GPU
         """
-        self.shape = tuple(shape)
         self.prob = prob
-        self.cuda = cuda
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        xv, yv = np.meshgrid(i, j)
-        xv = np.fliplr(xv).copy()
-
-        grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if cuda:
-            grid = grid.cuda()
-        self.grid = grid
 
     def __call__(self, x):
         """
         Forward call
-        :param x: input tensor (B, C, Y , X)
-        :return: output tensor (B, C, Y , X)
+        :param x: input tensor (B, C, N_1, N_2, ...)
+        :return: output tensor (B, C, N_1, N_2, ...)
         """
 
         if rnd.rand() < self.prob:
-            grid = self.grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
+            n = x.ndimension()
+            return torch.flip(x, dims=[n-1])
         else:
             return x
 
 
-class FlipX_3D(object):
+class FlipY(object):
 
-    def __init__(self, shape, prob=1, cuda=True):
-        """
-        Perform a flip along the X axis
-        :param shape: 3D shape of the inputs
-        :param prob: probability of flipping
-        :param cuda: specify whether the inputs are on the GPU
-        """
-        self.shape = shape
-        self.prob = prob
-        self.cuda = cuda
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        k = np.linspace(-1, 1, shape[2])
-        xv, yv, zv = np.meshgrid(i, j, k)
-        xv = np.fliplr(xv).copy()
-
-        grid = torch.cat(
-            (torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1), torch.Tensor(zv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if cuda:
-            grid = grid.cuda()
-        self.grid = grid
-
-    def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Z, Y , X)
-        :return: output tensor (B, C, Z, Y , X)
-        """
-
-        if rnd.rand() < self.prob:
-            grid = self.grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
-        else:
-            return x
-
-
-class FlipY_2D(object):
-
-    def __init__(self, shape, prob=1, cuda=True):
+    def __init__(self, prob=1):
         """
         Perform a flip along the Y axis
-        :param shape: 2D shape of the input input image
         :param prob: probability of flipping
-        :param cuda: specify whether the inputs are on the GPU
         """
-        self.shape = tuple(shape)
         self.prob = prob
-        self.cuda = cuda
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        xv, yv = np.meshgrid(i, j)
-        yv = np.flipud(yv).copy()
-
-        grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if cuda:
-            grid = grid.cuda()
-        self.grid = grid
 
     def __call__(self, x):
         """
         Forward call
-        :param x: input tensor (B, C, Y , X)
-        :return: output tensor (B, C, Y , X)
+        :param x: input tensor (B, C, N_1, N_2, ...)
+        :return: output tensor (B, C, N_1, N_2, ...)
         """
 
         if rnd.rand() < self.prob:
-            grid = self.grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
+            n = x.ndimension()
+            return torch.flip(x, dims=[n-2])
         else:
             return x
 
 
-class FlipY_3D(object):
+class FlipZ(object):
 
-    def __init__(self, shape, prob=1, cuda=True):
+    def __init__(self, prob=1):
         """
-        Perform a flip along the Y axis
-        :param shape: 3D shape of the inputs
+        Perform a flip along the Z axis
         :param prob: probability of flipping
-        :param cuda: specify whether the inputs are on the GPU
         """
-        self.shape = shape
         self.prob = prob
-        self.cuda = cuda
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        k = np.linspace(-1, 1, shape[2])
-        xv, yv, zv = np.meshgrid(i, j, k)
-        yv = np.flipud(yv).copy()
-
-        grid = torch.cat(
-            (torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1), torch.Tensor(zv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if cuda:
-            grid = grid.cuda()
-        self.grid = grid
 
     def __call__(self, x):
         """
         Forward call
-        :param x: input tensor (B, C, Z, Y , X)
-        :return: output tensor (B, C, Z, Y , X)
+        :param x: input tensor (B, C, N_1, N_2, ...)
+        :return: output tensor (B, C, N_1, N_2, ...)
         """
 
         if rnd.rand() < self.prob:
-            grid = self.grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
+            n = x.ndimension()
+            return torch.flip(x, dims=[n-3])
         else:
             return x
 
 
-class Rotate90_2D(object):
+class Rotate90(object):
 
     def __init__(self, prob=1):
         """
@@ -373,50 +245,13 @@ class Rotate90_2D(object):
     def __call__(self, x):
         """
         Forward call
-        :param x: input tensor (B, C, Y , X)
-        :return: output tensor (B, C, Y , X)
+        :param x: input tensor (B, C, N_1, N_2, ...)
+        :return: output tensor (B, C, N_1, N_2, ...)
         """
 
         if rnd.rand() < self.prob:
-            r = rnd.randint(0, 4)
-            if r == 0:
-                return x.transpose(2, 3)  # 90 degree rotation
-            elif r == 1:
-                return x.flip(2)  # 180 degree rotation
-            elif r == 2:
-                return x.transpose(2, 3).flip(3)  # 270 degree rotation
-            else:
-                return x  # 0 degree rotation
-        else:
-            return x
-
-
-class Rotate90_3D(object):
-
-    def __init__(self, prob=1):
-        """
-        Rotate the inputs by 90 degree angles
-        :param prob: probability of rotating
-        """
-        self.prob = prob
-
-    def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Z, Y , X)
-        :return: output tensor (B, C, Z, Y , X)
-        """
-
-        if rnd.rand() < self.prob:
-            r = rnd.randint(0, 4)
-            if r == 0:
-                return x.transpose(3, 4)  # 90 degree rotation
-            elif r == 1:
-                return x.flip(3)  # 180 degree rotation
-            elif r == 2:
-                return x.transpose(3, 4).flip(4)  # 270 degree rotation
-            else:
-                return x  # 0 degree rotation
+            n = x.ndimension()
+            return torch.rot90(x, k=rnd.randint(0, 4), dims=[n-2, n-1])
         else:
             return x
 
@@ -514,6 +349,47 @@ class RotateRandom_3D(object):
             return F.grid_sample(x, grid)
         else:
             return x
+
+
+class RandomCrop_2D(object):
+
+    def __init__(self, crop_shape):
+        """
+        Selects a random crop from the input
+        :param crop_shape: 2D shape of the crop
+        """
+        self.crop_shape = crop_shape
+
+    def __call__(self, x):
+        """
+        Forward call
+        :param x: input tensor (B, C, Y , X)
+        :return: output tensor (B, C, Y', X')
+        """
+        r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
+        c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
+        return x[:, :, r:r + self.crop_shape[0], c:c + self.crop_shape[1]]
+
+
+class RandomCrop_3D(object):
+
+    def __init__(self, crop_shape):
+        """
+        Selects a random crop from the input
+        :param crop_shape: 3D shape of the crop
+        """
+        self.crop_shape = crop_shape
+
+    def __call__(self, x):
+        """
+        Forward call
+        :param x: input tensor (B, C, Z , Y , X)
+        :return: output tensor (B, C, Z', Y', X')
+        """
+        r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
+        c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
+        z = np.random.randint(0, x.size(4) - self.crop_shape[2] + 1)
+        return x[:, :, r:r + self.crop_shape[0], c:c + self.crop_shape[1], z:z + self.crop_shape[2]]
 
 
 class RandomDeformation_2D(object):
