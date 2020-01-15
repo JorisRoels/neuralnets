@@ -1,7 +1,6 @@
-import augmentation.augmentation_2d as aug2d
-import augmentation.augmentation_3d as aug3d
-import torch
 from torchvision.transforms import Compose
+
+from neuralnets.util.augmentation import *
 
 
 def get_augmenter2d(crop_shape, sample_shape=None, scale_factor=(0.75, 1.25), deformation_scale=0.01, sigma_max=0.1,
@@ -30,24 +29,24 @@ def get_augmenter2d(crop_shape, sample_shape=None, scale_factor=(0.75, 1.25), de
         sample_shape = [crop_shape[0] * 2, crop_shape[1] * 2]
     augmenter = Compose([])
     if tofloat:
-        augmenter = Compose([augmenter, aug2d.ToFloatTensor(cuda=torch.cuda.is_available())])
+        augmenter = Compose([augmenter, ToFloatTensor(cuda=torch.cuda.is_available())])
     if rotate90:
-        augmenter = Compose([augmenter, aug2d.Rotate90(sample_shape)])
+        augmenter = Compose([augmenter, Rotate90_2D(sample_shape)])
     if rotate_rand:
-        augmenter = Compose([augmenter, aug2d.RotateRandom(sample_shape)])
+        augmenter = Compose([augmenter, RotateRandom_2D(sample_shape)])
     if scale:
-        augmenter = Compose([augmenter, aug2d.Scale(scale_factor=scale_factor)])
+        augmenter = Compose([augmenter, Scale(scale_factor=scale_factor)])
     if crop:
-        augmenter = Compose([augmenter, aug2d.RandomCrop(crop_shape=crop_shape)])
+        augmenter = Compose([augmenter, RandomCrop_2D(crop_shape=crop_shape)])
     if flipx:
-        augmenter = Compose([augmenter, aug2d.FlipX(crop_shape, prob=0.5)])
+        augmenter = Compose([augmenter, FlipX_2D(crop_shape, prob=0.5)])
     if flipy:
-        augmenter = Compose([augmenter, aug2d.FlipY(crop_shape, prob=0.5)])
+        augmenter = Compose([augmenter, FlipY_2D(crop_shape, prob=0.5)])
     if rand_deform:
-        augmenter = Compose([augmenter, aug2d.RandomDeformation(crop_shape, sigma=deformation_scale,
-                                                                include_segmentation=include_segmentation)])
+        augmenter = Compose([augmenter, RandomDeformation_2D(crop_shape, sigma=deformation_scale,
+                                                             include_segmentation=include_segmentation)])
     if noise:
-        augmenter = Compose([augmenter, aug2d.AddNoise(sigma_max=sigma_max, include_segmentation=include_segmentation)])
+        augmenter = Compose([augmenter, AddNoise(sigma_max=sigma_max, include_segmentation=include_segmentation)])
 
     return augmenter
 
@@ -78,23 +77,23 @@ def get_augmenter3d(crop_shape, sample_shape=None, scale_factor=(0.75, 1.25), de
         sample_shape = [crop_shape[0] * 2, crop_shape[1] * 2, crop_shape[2] * 2]
     augmenter = Compose([])
     if tofloat:
-        augmenter = Compose([augmenter, aug3d.ToFloatTensor(cuda=torch.cuda.is_available())])
+        augmenter = Compose([augmenter, ToFloatTensor(cuda=torch.cuda.is_available())])
     if rotate90:
-        augmenter = Compose([augmenter, aug3d.Rotate90(sample_shape)])
+        augmenter = Compose([augmenter, Rotate90_3D(sample_shape)])
     if rotate_rand:
-        augmenter = Compose([augmenter, aug2d.RotateRandom(sample_shape)])
+        augmenter = Compose([augmenter, RotateRandom_3D(sample_shape)])
     if scale:
-        augmenter = Compose([augmenter, aug3d.Scale(scale_factor=scale_factor)])
+        augmenter = Compose([augmenter, Scale(scale_factor=scale_factor)])
     if crop:
-        augmenter = Compose([augmenter, aug3d.RandomCrop(crop_shape=crop_shape)])
+        augmenter = Compose([augmenter, RandomCrop_3D(crop_shape=crop_shape)])
     if flipx:
-        augmenter = Compose([augmenter, aug3d.FlipX(crop_shape, prob=0.5)])
+        augmenter = Compose([augmenter, FlipX_3D(crop_shape, prob=0.5)])
     if flipy:
-        augmenter = Compose([augmenter, aug3d.FlipY(crop_shape, prob=0.5)])
+        augmenter = Compose([augmenter, FlipY_3D(crop_shape, prob=0.5)])
     if rand_deform:
-        augmenter = Compose([augmenter, aug3d.RandomDeformation(crop_shape, sigma=deformation_scale,
-                                                                include_segmentation=include_segmentation)])
+        augmenter = Compose([augmenter, RandomDeformation_3D(crop_shape, sigma=deformation_scale,
+                                                             include_segmentation=include_segmentation)])
     if noise:
-        augmenter = Compose([augmenter, aug3d.AddNoise(sigma_max=sigma_max, include_segmentation=include_segmentation)])
+        augmenter = Compose([augmenter, AddNoise(sigma_max=sigma_max, include_segmentation=include_segmentation)])
 
     return augmenter
