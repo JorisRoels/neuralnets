@@ -3,7 +3,6 @@ import random
 
 import numpy as np
 import torch
-from skimage.color import label2rgb
 
 from neuralnets.util.io import read_volume
 
@@ -121,19 +120,6 @@ def load_net(model_file):
     :return: a module that corresponds to the trained network
     """
     return torch.load(model_file)
-
-
-def overlay(x, y, alpha=0.3, colors=[[0, 1, 0]], bg_label=0):
-    """
-    Overlay an image with a segmentation map
-    :param x: input (grayscale) image
-    :param y: label map (all zeros are assumed background)
-    :param alpha: opacity level of the overlay
-    :param colors: list of colors
-    :param bg_label: background label
-    :return: a color image with the labels overlayed
-    """
-    return label2rgb(y, image=x, alpha=alpha, colors=colors, bg_label=bg_label)
 
 
 def set_seed(seed):
