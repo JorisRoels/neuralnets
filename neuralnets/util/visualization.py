@@ -16,7 +16,7 @@ def overlay(x, y, colors=[(0, 1, 0)], alpha=0.2, boundaries=False):
     y = y.astype('uint8')
     if boundaries:
         seg_img = np.stack((x, x, x), axis=2)
-        for l in range(max(y)):
+        for l in range(np.max(y)):
             seg_img = mark_boundaries(seg_img, label((y == (l + 1)).astype('uint8')), mode='thick', color=colors[l])
     else:
         seg_img = np.stack((x, x, x), axis=2)
