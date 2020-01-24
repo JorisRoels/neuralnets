@@ -9,3 +9,4 @@ h5py
 scikit-image
 opencv-python
 progress
+six
