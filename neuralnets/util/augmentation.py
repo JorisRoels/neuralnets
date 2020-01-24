@@ -3,7 +3,7 @@ import numpy as np
 import numpy.random as rnd
 import torch
 import torch.nn.functional as F
-from scipy.ndimage import spline_filter1d
+from scipy.ndimage import spline_filter1d, zoom
 
 
 class ToTensor(object):
@@ -182,7 +182,7 @@ class FlipX(object):
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
-            return torch.flip(x, dims=[n-1])
+            return torch.flip(x, dims=[n - 1])
         else:
             return x
 
@@ -205,7 +205,7 @@ class FlipY(object):
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
-            return torch.flip(x, dims=[n-2])
+            return torch.flip(x, dims=[n - 2])
         else:
             return x
 
@@ -228,7 +228,7 @@ class FlipZ(object):
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
-            return torch.flip(x, dims=[n-3])
+            return torch.flip(x, dims=[n - 3])
         else:
             return x
 
@@ -251,7 +251,7 @@ class Rotate90(object):
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
-            return torch.rot90(x, k=rnd.randint(0, 4), dims=[n-2, n-1])
+            return torch.rot90(x, k=rnd.randint(0, 4), dims=[n - 2, n - 1])
         else:
             return x
 
@@ -394,25 +394,28 @@ class RandomCrop_3D(object):
 
 class RandomDeformation_2D(object):
 
-    def __init__(self, shape, prob=1, cuda=True, points=None, sigma=0.01, include_segmentation=False,
-                 sampling_interval=64):
+    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=8, sigma=0.01, n_grids=1000,
+                 include_segmentation=False):
         """
         Apply random deformation to the inputs
-        :param shape: 2D shape of the input image
+        :param shape: shape of the inputs
         :param prob: probability of deforming the data
         :param cuda: specifies whether the inputs are on the GPU
         :param points: seed points for deformation
-        :param sigma: standard deviation for deformation
+        :param grid_size: number of pixels between each grid point
+        :param n_grids: number of grids to load in advance (chose more for higher variance in the data)
         :param include_segmentation: 2nd half of the batch needs casting to integers because of warping
-        :param sampling_interval: determine amount of points to be sampled for deformation
         """
-        self.shape = tuple(shape)
+        self.shape = shape
         self.prob = prob
         self.cuda = cuda
+        self.grid_size = grid_size
         if points == None:
-            points = [shape[0] // sampling_interval, shape[1] // sampling_interval]
+            points = [shape[0] // self.grid_size, shape[1] // self.grid_size]
         self.points = points
         self.sigma = sigma
+        self.n_grids = n_grids
+        self.grids = []
         self.p = 10
         self.include_segmentation = include_segmentation
 
@@ -425,6 +428,10 @@ class RandomDeformation_2D(object):
         if cuda:
             grid = grid.cuda()
         self.grid = grid
+
+        # generate several random grids in advance (less CPU work)
+        for i in range(self.n_grids):
+            self.grids.append(self._deformation_grid())
 
     def _deformation_grid(self):
         """
@@ -443,8 +450,7 @@ class RandomDeformation_2D(object):
         # resample to proper size
         displacement_f = np.zeros((self.shape[0], self.shape[1], 2))
         for d in range(0, displacement.ndim - 1):
-            displacement_f[:, :, d] = cv2.resize(displacement[:, :, d], dsize=self.shape,
-                                                 interpolation=cv2.INTER_CUBIC)
+            displacement_f[:, :, d] = zoom(displacement[:, :, d], self.grid_size)
 
         displacement = torch.Tensor(displacement_f).unsqueeze(0)
         if self.cuda:
@@ -461,7 +467,7 @@ class RandomDeformation_2D(object):
         """
 
         if rnd.rand() < self.prob:
-            grid = self._deformation_grid()
+            grid = self.grids[rnd.randint(self.n_grids)]
             grid = grid.repeat_interleave(x.size(0), dim=0)
             x_aug = F.grid_sample(x, grid, padding_mode="border")
             if self.include_segmentation:
@@ -473,23 +479,28 @@ class RandomDeformation_2D(object):
 
 class RandomDeformation_3D(object):
 
-    def __init__(self, shape, prob=1, cuda=True, points=None, sigma=0.01, include_segmentation=False):
+    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=8, sigma=0.01, n_grids=1000,
+                 include_segmentation=False):
         """
         Apply random deformation to the inputs
         :param shape: shape of the inputs
         :param prob: probability of deforming the data
         :param cuda: specifies whether the inputs are on the GPU
         :param points: seed points for deformation
-        :param sigma: standard deviation for deformation
+        :param grid_size: number of pixels between each grid point
+        :param n_grids: number of grids to load in advance (chose more for higher variance in the data)
         :param include_segmentation: 2nd half of the batch needs casting to integers because of warping
         """
         self.shape = shape
         self.prob = prob
         self.cuda = cuda
+        self.grid_size = grid_size
         if points == None:
-            points = [shape[0] // 64, shape[1] // 64, shape[2] // 32]
+            points = [shape[0] // self.grid_size, shape[1] // self.grid_size, shape[2] // self.grid_size]
         self.points = points
         self.sigma = sigma
+        self.n_grids = n_grids
+        self.grids = []
         self.p = 10
         self.include_segmentation = include_segmentation
 
@@ -505,13 +516,17 @@ class RandomDeformation_3D(object):
             grid = grid.cuda()
         self.grid = grid
 
+        # generate several random grids in advance (less CPU work)
+        for i in range(self.n_grids):
+            self.grids.append(self._deformation_grid())
+
     def _deformation_grid(self):
         """
         Get a new random deformation grid
         :return: deformation tensor
         """
         sigma = np.random.rand() * self.sigma
-        displacement = np.random.randn(*self.points, 2) * sigma
+        displacement = np.random.randn(*self.points, 3) * sigma
 
         # filter the displacement
         displacement_f = np.zeros_like(displacement)
@@ -520,10 +535,9 @@ class RandomDeformation_3D(object):
             displacement = displacement_f
 
         # resample to proper size
-        displacement_f = np.zeros((self.shape[0], self.shape[1], self.shape[2], 2))
+        displacement_f = np.zeros((self.shape[0], self.shape[1], self.shape[2], 3))
         for d in range(0, displacement.ndim - 1):
-            displacement_f[:, :, :, d] = cv2.resize(displacement[:, :, :, d], dsize=self.shape,
-                                                    interpolation=cv2.INTER_CUBIC)
+            displacement_f[:, :, :, d] = zoom(displacement[:, :, :, d], self.grid_size)
 
         displacement = torch.Tensor(displacement_f).unsqueeze(0)
         if self.cuda:
@@ -540,7 +554,7 @@ class RandomDeformation_3D(object):
         """
 
         if rnd.rand() < self.prob:
-            grid = self._deformation_grid()
+            grid = self.grids[rnd.randint(self.n_grids)]
             grid = grid.repeat_interleave(x.size(0), dim=0)
             x_aug = F.grid_sample(x, grid, padding_mode="border")
             if self.include_segmentation:
