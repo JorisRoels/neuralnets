@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
 from neuralnets.data.datasets import StronglyLabeledVolumeDataset
-from neuralnets.networks.unet import UNet2D
+from neuralnets.networks.unet import UNet3D
 from neuralnets.util.augmentation import *
 from neuralnets.util.losses import CrossEntropyLoss
 from neuralnets.util.tools import set_seed
@@ -28,14 +28,14 @@ parser = argparse.ArgumentParser()
 
 # logging parameters
 parser.add_argument("--seed", help="Seed for randomization", type=int, default=0)
-parser.add_argument("--log_dir", help="Logging directory", type=str, default="unet_2d")
+parser.add_argument("--log_dir", help="Logging directory", type=str, default="unet_3d")
 parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses",
                     type=int, default=50)
 
 # network parameters
 parser.add_argument("--data_dir", help="Data directory", type=str, default="../../../data")
 parser.add_argument("--input_size", help="Size of the blocks that propagate through the network",
-                    type=str, default="256,256")
+                    type=str, default="32,32,32")
 parser.add_argument("--fm", help="Number of initial feature maps in the segmentation U-Net", type=int, default=16)
 parser.add_argument("--levels", help="Number of levels in the segmentation U-Net (i.e. number of pooling stages)",
                     type=int, default=4)
@@ -74,18 +74,17 @@ if not os.path.exists(args.log_dir):
 """
     Load the data
 """
-input_shape = (1, args.input_size[0], args.input_size[1])
 print('[%s] Loading data' % (datetime.datetime.now()))
 cuda = torch.cuda.is_available()
 augmenter = Compose([ToFloatTensor(cuda=cuda), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5),
-                     RandomDeformation_2D(input_shape[1:], cuda=cuda, include_segmentation=True),
+                     RandomDeformation_3D(args.input_size, cuda=cuda, include_segmentation=True),
                      AddNoise(sigma_max=10, include_segmentation=True)])
 train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/training.tif'),
                                      os.path.join(args.data_dir, 'EM/EPFL/training_groundtruth.tif'),
-                                     input_shape=input_shape, len_epoch=args.len_epoch)
+                                     input_shape=args.input_size, len_epoch=args.len_epoch)
 test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/testing.tif'),
                                     os.path.join(args.data_dir, 'EM/EPFL/testing_groundtruth.tif'),
-                                    input_shape=input_shape, len_epoch=args.len_epoch)
+                                    input_shape=args.input_size, len_epoch=args.len_epoch)
 train.data = train.data / 255
 test.data = test.data / 255
 train.labels = train.labels / 255
@@ -97,7 +96,7 @@ test_loader = DataLoader(test, batch_size=args.train_batch_size)
     Build the network
 """
 print('[%s] Building the network' % (datetime.datetime.now()))
-net = UNet2D(feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout, dropout_dec=args.dropout,
+net = UNet3D(feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout, dropout_dec=args.dropout,
              norm=args.norm, activation=args.activation, bnd_weight_map=args.bnd_weight_map)
 
 """
