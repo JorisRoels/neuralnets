@@ -507,7 +507,7 @@ class RandomDeformation_3D(object):
         i = np.linspace(-1, 1, shape[0])
         j = np.linspace(-1, 1, shape[1])
         k = np.linspace(-1, 1, shape[2])
-        xv, yv, zv = np.meshgrid(i, j, k)
+        xv, yv, zv = np.meshgrid(k, i, j)
 
         grid = torch.cat(
             (torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1), torch.Tensor(zv).unsqueeze(-1)), dim=-1)
