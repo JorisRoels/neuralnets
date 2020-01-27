@@ -75,7 +75,9 @@ class CrossEntropyFTLoss(nn.Module):
         else:
             loss_src = 0
 
-        return loss_tar + self.lambda_src*loss_src
+        loss = loss_tar + self.lambda_src*loss_src
+
+        return loss, loss_tar, loss_src
 
 
 class LpLoss(nn.Module):
