@@ -240,9 +240,6 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
         # get random sample
         input, target = sample_labeled_input(self.data[k], self.labels[k], self.input_shape)
 
-        # make sure the targets are binary
-        target = np.asarray(target > 0.5, dtype='uint8')
-
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
             return input[np.newaxis, ...], target[np.newaxis, ...]
