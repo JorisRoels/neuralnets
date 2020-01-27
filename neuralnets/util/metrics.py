@@ -2,17 +2,24 @@ import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 
 
-def jaccard(x, y):
+def jaccard(x, y, w=None):
     """
     Jaccard index between two segmentations
     :param x: array
     :param y: array
+    :param w: masking array
     :return: the Jaccard index
     """
 
     # binarize
     x = x > 0.5
     y = y > 0.5
+
+    # check mask
+    if w is None:
+        w = np.ones_like(x, dtype='bool')
+    x = x[w]
+    y = y[w]
 
     # stabilizing constant
     eps = 1e-10
@@ -23,17 +30,24 @@ def jaccard(x, y):
     return (intersection + eps) / (union + eps)
 
 
-def dice(x, y):
+def dice(x, y, w=None):
     """
     Dice coefficient between two segmentations
     :param x: array
     :param y: array
+    :param w: masking array
     :return: the Dice coefficient
     """
 
     # binarize
     x = x > 0.5
     y = y > 0.5
+
+    # check mask
+    if w is None:
+        w = np.ones_like(x, dtype='bool')
+    x = x[w]
+    y = y[w]
 
     # stabilizing constant
     eps = 1e-10
@@ -43,17 +57,24 @@ def dice(x, y):
     return 2 * (intersection + eps) / (np.sum(x) + np.sum(y) + eps)
 
 
-def accuracy_metrics(x, y):
+def accuracy_metrics(x, y, w=None):
     """
     Accuracy, precision, recall and f-score between two segmentations
     :param x: array
     :param y: array
+    :param w: masking array
     :return: the accuracy metrics
     """
 
     # binarize
     x = x > 0.5
     y = y > 0.5
+
+    # check mask
+    if w is None:
+        w = np.ones_like(x, dtype='bool')
+    x = x[w]
+    y = y[w]
 
     # stabilizing constant
     eps = 1e-10
