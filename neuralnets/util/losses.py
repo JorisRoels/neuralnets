@@ -52,6 +52,32 @@ class CrossEntropyLoss(nn.Module):
         return loss
 
 
+class CrossEntropyFTLoss(nn.Module):
+
+    def __init__(self, class_weight=None, size_average=True, lambda_src=0):
+        """
+        Initialization of the cross entropy loss function for finetuning
+        :param class_weight: weights for the classes
+        :param size_average: flag that specifies whether to apply size averaging at the end or not
+        :param lambda_src: source regularization parameter
+        """
+
+        super(CrossEntropyFTLoss, self).__init__()
+
+        self.ce = CrossEntropyLoss(class_weight=class_weight, size_average=size_average)
+        self.lambda_src = lambda_src
+
+    def forward(self, input_tar, target_tar, weight_tar=None, input_src=None, target_src=None, weight_src=None):
+
+        loss_tar = self.ce(input_tar, target_tar, weight=weight_tar)
+        if self.lambda_src > 0:
+            loss_src = self.ce(input_src, target_src, weight=weight_src)
+        else:
+            loss_src = 0
+
+        return loss_tar + self.lambda_src*loss_src
+
+
 class LpLoss(nn.Module):
 
     def __init__(self, p=2, size_average=True):
