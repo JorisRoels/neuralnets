@@ -63,7 +63,10 @@ class StronglyLabeledStandardDataset(StandardDataset):
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
-            return input[np.newaxis, ...], target[np.newaxis, ...]
+            input, target = input[np.newaxis, ...], target[np.newaxis, ...]
+
+        if target.min() == 255:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+            return self.__getitem__(i)
         else:
             return input, target
 
@@ -144,7 +147,10 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
-            return input[np.newaxis, ...], target[np.newaxis, ...]
+            input, target = input[np.newaxis, ...], target[np.newaxis, ...]
+
+        if target.min() == 255:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+            return self.__getitem__(i)
         else:
             return input, target
 
@@ -242,7 +248,10 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
-            return input[np.newaxis, ...], target[np.newaxis, ...]
+            input, target = input[np.newaxis, ...], target[np.newaxis, ...]
+
+        if target.min() == 255:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+            return self.__getitem__(i)
         else:
             return input, target
 
