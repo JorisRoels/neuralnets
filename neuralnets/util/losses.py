@@ -73,7 +73,7 @@ class CrossEntropyFTLoss(nn.Module):
         if self.lambda_src > 0:
             loss_src = self.ce(input_src, target_src, weight=weight_src)
         else:
-            loss_src = 0
+            loss_src = torch.Tensor([0])
 
         loss = loss_tar + self.lambda_src*loss_src
 
