@@ -201,7 +201,7 @@ def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, t
                                 batch_size=batch_size, step_size=step_size, train=train, track_progress=track_progress)
 
 
-def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_file=None,
+def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, write_dir=None, val_file=None,
              writer=None, epoch=0, track_progress=False):
     """
     Validate a network on a dataset and its labels
@@ -209,6 +209,7 @@ def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_fi
     :param data: 3D array (Z, Y, X) representing the 3D image
     :param labels: 3D array (Z, Y, X) representing the 3D labels
     :param input_size: size of the inputs (either 2 or 3-tuple) for processing
+    :param label_of_interest: index of the label of interest
     :param batch_size: batch size for processing
     :param write_dir: optionally, specify a directory to write the output
     :param val_file: optionally, specify a file to write the validation results
@@ -224,9 +225,10 @@ def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_fi
         os.mkdir(write_dir)
 
     segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress)
-    j = jaccard(segmentation, labels, w=labels != 255)
-    d = dice(segmentation, labels, w=labels != 255)
-    a, p, r, f = accuracy_metrics(segmentation, labels, w=labels != 255)
+    labels_interest = (labels == label_of_interest).astype('float')
+    j = jaccard(segmentation, labels_interest, w=labels != 255)
+    d = dice(segmentation, labels_interest, w=labels != 255)
+    a, p, r, f = accuracy_metrics(segmentation, labels_interest, w=labels != 255)
     if np.sum(labels == 255) > 0:
         h = -1
     else:
