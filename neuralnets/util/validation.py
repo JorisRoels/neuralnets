@@ -224,10 +224,13 @@ def validate(net, data, labels, input_size, batch_size=1, write_dir=None, val_fi
         os.mkdir(write_dir)
 
     segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress)
-    j = jaccard(segmentation, labels)
-    d = dice(segmentation, labels)
-    a, p, r, f = accuracy_metrics(segmentation, labels)
-    h = hausdorff_distance(segmentation, labels)[0]
+    j = jaccard(segmentation, labels, w=labels != 255)
+    d = dice(segmentation, labels, w=labels != 255)
+    a, p, r, f = accuracy_metrics(segmentation, labels, w=labels != 255)
+    if np.sum(labels == 255) > 0:
+        h = -1
+    else:
+        h = hausdorff_distance(segmentation, labels)[0]
     if write_dir is not None:
         print('[%s] Writing the output' % (datetime.datetime.now()))
         write_volume(255 * segmentation, write_dir, type='pngseq')
