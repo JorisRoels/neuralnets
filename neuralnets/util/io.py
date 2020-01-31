@@ -94,6 +94,18 @@ def read_png(file, dtype='uint8'):
     return data
 
 
+def read_jpg(file, dtype='uint8'):
+    """
+    Read a 2D JPG file
+    :param file: file to be read
+    :param dtype: data type of the output
+    """
+
+    data = cv2.imread(file, cv2.IMREAD_GRAYSCALE).astype(dtype)
+
+    return data
+
+
 def read_pngseq(dir, dtype='uint8', start=0, stop=-1):
     """
     Read a sequence of 2D PNG files
@@ -155,6 +167,17 @@ def write_png(x, file):
     """
 
     cv2.imwrite(file, x.astype('uint8'), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
+
+def write_jpg(x, file, quality=100):
+    """
+    Write a 2D data set to a JPEG file
+    :param x: 3D data array
+    :param file: directory to write the data to
+    :param quality: quality of the JPEG compression (0-100)
+    """
+
+    cv2.imwrite(file, x.astype('uint8'), [cv2.IMWRITE_JPEG_QUALITY, quality])
 
 
 def write_tifseq(x, dir, prefix='', start=0, stop=-1, dtype='uint8', K=4):
