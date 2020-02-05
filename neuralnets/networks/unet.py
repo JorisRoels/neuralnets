@@ -262,15 +262,11 @@ class UNet2D(nn.Module):
 
         # keep track of the average loss and metrics during the epoch
         loss_cum = 0.0
-        j_cum = 0.0
-        a_cum = 0.0
-        ba_cum = 0.0
-        p_cum = 0.0
-        r_cum = 0.0
-        f_cum = 0.0
         cnt = 0
 
         # test loss
+        y_preds = []
+        ys = []
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -291,24 +287,17 @@ class UNet2D(nn.Module):
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
-            # compute other interesting metrics
-            y_ = F.softmax(y_pred, dim=1).data.cpu().numpy()[:, 1:2, ...]
-            j_cum += jaccard(y.cpu().numpy(), y_)
-            a, ba, p, r, f = accuracy_metrics(y.cpu().numpy(), y_)
-            a_cum += a;
-            ba_cum += ba;
-            p_cum += p;
-            r_cum += r;
-            f_cum += f;
+            y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[:, 1, ...])
+            ys.append(y[:, 0, ...].cpu().numpy())
+
+        # compute interesting metrics
+        y_preds = np.asarray(y_preds)
+        ys = np.asarray(ys)
+        j = jaccard(ys, y_preds)
+        a, ba, p, r, f = accuracy_metrics(ys, y_preds)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        j_avg = j_cum / cnt
-        a_avg = a_cum / cnt
-        ba_avg = ba_cum / cnt
-        p_avg = p_cum / cnt
-        r_avg = r_cum / cnt
-        f_avg = f_cum / cnt
         print('[%s] Epoch %5d - Average test loss: %.6f'
               % (datetime.datetime.now(), epoch, loss_avg))
 
@@ -317,12 +306,12 @@ class UNet2D(nn.Module):
 
             # always log scalars
             writer.add_scalar('test/loss-seg', loss_avg, epoch)
-            writer.add_scalar('test/jaccard', j_avg, epoch)
-            writer.add_scalar('test/accuracy', a_avg, epoch)
-            writer.add_scalar('test/balanced_accuracy', ba_avg, epoch)
-            writer.add_scalar('test/precision', p_avg, epoch)
-            writer.add_scalar('test/recall', r_avg, epoch)
-            writer.add_scalar('test/f-score', f_avg, epoch)
+            writer.add_scalar('test/jaccard', j, epoch)
+            writer.add_scalar('test/accuracy', a, epoch)
+            writer.add_scalar('test/balanced_accuracy', ba, epoch)
+            writer.add_scalar('test/precision', p, epoch)
+            writer.add_scalar('test/recall', r, epoch)
+            writer.add_scalar('test/f-score', f, epoch)
 
             # log images if necessary
             if write_images:
