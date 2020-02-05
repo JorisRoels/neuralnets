@@ -29,8 +29,8 @@ setuptools.setup(
         "h5py",
         "scikit-image",
         "opencv-python",
-        "progress"
-        "six"
+        "progress",
+        "six",
         "sklearn"
     ]
 )
