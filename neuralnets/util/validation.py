@@ -85,7 +85,7 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
         if is2d:
             step_size = (1, input_shape[0] // 2, input_shape[1] // 2)
         else:
-            step_size = (input_shape[0] // 2, input_shape[1] // 2, input_shape[2] // 2)
+            step_size = (max(input_shape[0] // 2, 1), input_shape[1] // 2, input_shape[2] // 2)
 
     # gaussian window for smooth block merging
     if is2d:
