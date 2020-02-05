@@ -6,6 +6,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage import measure
+from torch.autograd import Function
+from torch.autograd import Variable
+
+from neuralnets.util.bilateralfilter.build.lib.bilateralfilter import bilateralfilter_batch
 
 
 class CrossEntropyLoss(nn.Module):
@@ -195,6 +199,48 @@ class KLDLoss(nn.Module):
         kld = torch.mean(-0.5 * torch.sum(klds, dim=1), dim=0)
 
         return kld
+
+
+class DenseCRFLossFunction(Function):
+
+    @staticmethod
+    def forward(ctx, images, segmentations, sigma_rgb, sigma_xy):
+        ctx.save_for_backward(segmentations)
+        ctx.N, ctx.K, ctx.H, ctx.W = segmentations.shape
+
+        densecrf_loss = 0.0
+        images = torch.repeat_interleave(images, 3, 1)
+        images = images.numpy().flatten()
+        segmentations = segmentations.cpu().numpy().flatten()
+        AS = np.zeros(segmentations.shape, dtype=np.float32)
+        bilateralfilter_batch(images, segmentations, AS, ctx.N, ctx.K, ctx.H, ctx.W, sigma_rgb, sigma_xy)
+        densecrf_loss -= np.dot(segmentations, AS)
+
+        # averaged by the number of images
+        densecrf_loss /= ctx.N
+
+        ctx.AS = np.reshape(AS, (ctx.N, ctx.K, ctx.H, ctx.W))
+        return Variable(torch.tensor([densecrf_loss]), requires_grad=True)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_segmentation = -2 * grad_output * torch.from_numpy(ctx.AS) / ctx.N
+        grad_segmentation = grad_segmentation.cuda()
+        return None, grad_segmentation, None, None, None
+
+
+class DenseCRFLoss(nn.Module):
+    def __init__(self, weight, sigma_rgb, sigma_xy):
+        super(DenseCRFLoss, self).__init__()
+        self.weight = weight
+        self.sigma_rgb = sigma_rgb
+        self.sigma_xy = sigma_xy
+
+    def forward(self, images, segmentations):
+        return self.weight * DenseCRFLossFunction.apply(images * 255, segmentations, self.sigma_rgb, self.sigma_xy)
+
+    def extra_repr(self):
+        return 'sigma_rgb={}, sigma_xy={}, weight={}'.format(self.sigma_rgb, self.sigma_xy, self.weight)
 
 
 def boundary_weight_map(labels, sigma=20, w0=1):
