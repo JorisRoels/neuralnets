@@ -224,7 +224,23 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
     if write_dir is not None and not os.path.exists(write_dir):
         os.mkdir(write_dir)
 
+    # extend boundaries if necessary
+    zo, yo, xo = data.shape
+    zp = int(np.ceil(max(0, input_size[0] - zo) / 2))
+    yp = int(np.ceil(max(0, input_size[1] - yo) / 2))
+    xp = int(np.ceil(max(0, input_size[2] - xo) / 2))
+    data = np.pad(data, ((zp, zp), (yp, yp), (xp, xp)), mode='symmetric')
+    labels = np.pad(labels, ((zp, zp), (yp, yp), (xp, xp)), mode='symmetric')
+
+    # compute segmentation
     segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress)
+
+    # crop to original size
+    data = data[zp:zo - zp, yp:yo - yp, xp:xo - xp]
+    labels = labels[zp:zo - zp, yp:yo - yp, xp:xo - xp]
+    segmentation = segmentation[zp:zo - zp, yp:yo - yp, xp:xo - xp]
+
+    # compute metrics
     labels_interest = (labels == label_of_interest).astype('float')
     j = jaccard(segmentation, labels_interest, w=labels != 255)
     a, ba, p, r, f = accuracy_metrics(segmentation, labels_interest, w=labels != 255)
@@ -232,6 +248,18 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
         h = -1
     else:
         h = hausdorff_distance(segmentation, labels)[0]
+
+    # report results
+    print('[%s] Validation performance: ' % (datetime.datetime.now()))
+    print('[%s]     - Accuracy: %f' % (datetime.datetime.now(), a))
+    print('[%s]     - Balanced accuracy: %f' % (datetime.datetime.now(), ba))
+    print('[%s]     - Precision: %f' % (datetime.datetime.now(), p))
+    print('[%s]     - Recall: %f' % (datetime.datetime.now(), r))
+    print('[%s]     - F1 score: %f' % (datetime.datetime.now(), f))
+    print('[%s]     - Jaccard index: %f' % (datetime.datetime.now(), j))
+    print('[%s]     - Hausdorff distance: %f' % (datetime.datetime.now(), h))
+
+    # write stuff if necessary
     if write_dir is not None:
         print('[%s] Writing the output' % (datetime.datetime.now()))
         write_volume(255 * segmentation, write_dir, type='pngseq')
@@ -244,8 +272,6 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
         else:
             writer.add_image('val/input', data[z:z + 1, ...], epoch)
             writer.add_image('val/segmentation', segmentation[z:z + 1, ...], epoch)
-
-    print('[%s] Network performance: Jaccard=%f - Dice=%f' % (datetime.datetime.now(), j, d))
     if val_file is not None:
-        np.save(val_file, np.asarray([a, p, r, f, j, d, h]))
+        np.save(val_file, np.asarray([a, p, r, f, j, h]))
     return a, ba, p, r, f, j, h
