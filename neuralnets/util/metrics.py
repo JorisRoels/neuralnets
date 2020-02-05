@@ -1,95 +1,77 @@
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, jaccard_score, precision_score, recall_score, \
+    f1_score
 
 
-def jaccard(x, y, w=None):
+def jaccard(y_true, y_pred, w=None):
     """
     Jaccard index between two segmentations
-    :param x: array
-    :param y: array
-    :param w: masking array
+    :param y_true: (N1, N2, ...) array of the true labels
+    :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
+    :param w: (N1, N2, ...) masking array
     :return: the Jaccard index
     """
 
-    # binarize
-    x = x > 0.5
-    y = y > 0.5
-
     # check mask
     if w is None:
-        w = np.ones_like(x, dtype='bool')
-    x = x[w]
-    y = y[w]
+        w = np.ones_like(y_true, dtype='bool')
+    y_true = y_true[w]
+    y_pred = y_pred[w]
 
-    # stabilizing constant
-    eps = 1e-10
+    # binarize
+    y_true = (y_true > 0.5).astype('int')
+    y_pred = (y_pred > 0.5).astype('int')
 
-    # compute jaccard
-    intersection = np.sum(np.multiply(x, y))
-    union = np.sum(x) + np.sum(y) - intersection
-    return (intersection + eps) / (union + eps)
+    return jaccard_score(y_true, y_pred)
 
 
-def dice(x, y, w=None):
+def dice(y_true, y_pred, w=None):
     """
     Dice coefficient between two segmentations
-    :param x: array
-    :param y: array
-    :param w: masking array
-    :return: the Dice coefficient
+    :param y_true: (N1, N2, ...) array of the true labels
+    :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
+    :param w: (N1, N2, ...) masking array
+    :return: the Jaccard index
     """
 
-    # binarize
-    x = x > 0.5
-    y = y > 0.5
+    j = jaccard(y_true, y_pred, w=w)
+
+    return 2 * j / (1 + j)
+
+
+def accuracy_metrics(y_true, y_pred, w=None):
+    """
+    Accuracy metrics between two segmentations:
+        - Accuracy
+        - Balanced accuracy
+        - Precision
+        - Recall
+        - F1-score
+    :param y_true: (N1, N2, ...) array of the true labels
+    :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
+    :param w: (N1, N2, ...) masking array
+    :return: the Jaccard index
+    """
 
     # check mask
     if w is None:
-        w = np.ones_like(x, dtype='bool')
-    x = x[w]
-    y = y[w]
-
-    # stabilizing constant
-    eps = 1e-10
-
-    # compute dice
-    intersection = np.sum(np.multiply(x, y))
-    return 2 * (intersection + eps) / (np.sum(x) + np.sum(y) + eps)
-
-
-def accuracy_metrics(x, y, w=None):
-    """
-    Accuracy, precision, recall and f-score between two segmentations
-    :param x: array
-    :param y: array
-    :param w: masking array
-    :return: the accuracy metrics
-    """
+        w = np.ones_like(y_true, dtype='bool')
+    y_true = y_true[w]
+    y_pred = y_pred[w]
 
     # binarize
-    x = x > 0.5
-    y = y > 0.5
+    y_true = (y_true > 0.5).astype('int')
+    y_pred = (y_pred > 0.5).astype('int')
 
-    # check mask
-    if w is None:
-        w = np.ones_like(x, dtype='bool')
-    x = x[w]
-    y = y[w]
+    # compute accuracy metrics
+    accuracy = accuracy_score(y_true, y_pred)
+    balanced_accuracy = balanced_accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
 
-    # stabilizing constant
-    eps = 1e-10
-
-    tp = np.sum(np.multiply(x, y))
-    tn = np.sum(np.multiply(1 - x, 1 - y))
-    fp = np.sum(np.multiply(x, 1 - y))
-    fn = np.sum(np.multiply(1 - x, y))
-
-    accuracy = (tp + tn + eps) / (tp + tn + fp + fn + eps)
-    precision = (tp + eps) / (tp + fp + eps)
-    recall = (tp + eps) / (tp + fn + eps)
-    f_score = (2 * (precision * recall) + eps) / (precision + recall + eps)
-
-    return accuracy, precision, recall, f_score
+    return accuracy, balanced_accuracy, precision, recall, f1
 
 
 def hausdorff_distance(x, y):

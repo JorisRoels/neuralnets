@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from progress.bar import Bar
 
 from neuralnets.util.io import write_volume
-from neuralnets.util.metrics import jaccard, dice, accuracy_metrics, hausdorff_distance
+from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distance
 from neuralnets.util.tools import gaussian_window
 
 
@@ -227,8 +227,7 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
     segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress)
     labels_interest = (labels == label_of_interest).astype('float')
     j = jaccard(segmentation, labels_interest, w=labels != 255)
-    d = dice(segmentation, labels_interest, w=labels != 255)
-    a, p, r, f = accuracy_metrics(segmentation, labels_interest, w=labels != 255)
+    a, ba, p, r, f = accuracy_metrics(segmentation, labels_interest, w=labels != 255)
     if np.sum(labels == 255) > 0:
         h = -1
     else:
@@ -249,4 +248,4 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
     print('[%s] Network performance: Jaccard=%f - Dice=%f' % (datetime.datetime.now(), j, d))
     if val_file is not None:
         np.save(val_file, np.asarray([a, p, r, f, j, d, h]))
-    return a, p, r, f, j, d, h
+    return a, ba, p, r, f, j, h
