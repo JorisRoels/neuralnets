@@ -226,9 +226,14 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
 
     # extend boundaries if necessary
     zo, yo, xo = data.shape
-    zp = int(np.ceil(max(0, input_size[0] - zo) / 2))
-    yp = int(np.ceil(max(0, input_size[1] - yo) / 2))
-    xp = int(np.ceil(max(0, input_size[2] - xo) / 2))
+    if len(input_size) == 3:
+        zp = int(np.ceil(max(0, input_size[0] - zo) / 2))
+        yp = int(np.ceil(max(0, input_size[1] - yo) / 2))
+        xp = int(np.ceil(max(0, input_size[2] - xo) / 2))
+    else:  # 2D case
+        zp = 0
+        yp = int(np.ceil(max(0, input_size[0] - yo) / 2))
+        xp = int(np.ceil(max(0, input_size[1] - xo) / 2))
     data = np.pad(data, ((zp, zp), (yp, yp), (xp, xp)), mode='symmetric')
     labels = np.pad(labels, ((zp, zp), (yp, yp), (xp, xp)), mode='symmetric')
 
