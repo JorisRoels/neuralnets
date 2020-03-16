@@ -199,7 +199,7 @@ class MultiVolumeDataset(data.Dataset):
             self.data.append(data)
             self.data_sizes.append(data.size)
         self.data_sizes = np.array(self.data_sizes)
-        self.data_sizes /= np.sum(self.data_sizes)
+        self.data_sizes = self.data_sizes / np.sum(self.data_sizes)
 
     def __getitem__(self, i):
         pass
