@@ -176,14 +176,16 @@ class UnlabeledVolumeDataset(VolumeDataset):
 
 class MultiVolumeDataset(data.Dataset):
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d']):
+    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform'):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
         self.len_epoch = len_epoch
+        self.sampling_mode = sampling_mode
 
         # load the data
         self.data = []
+        self.data_sizes = []
         for k, path in enumerate(data_path):
             data = read_volume(path, type=types[k])
 
@@ -192,10 +194,12 @@ class MultiVolumeDataset(data.Dataset):
                 target_size = np.asarray(np.multiply(data.shape, scaling[k]), dtype=int)
                 data = \
                     F.interpolate(torch.Tensor(data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
-                                  mode='area')[
-                        0, 0, ...].numpy()
+                                  mode='area')[0, 0, ...].numpy()
 
             self.data.append(data)
+            self.data_sizes.append(data.size)
+        self.data_sizes = np.array(self.data_sizes)
+        self.data_sizes /= np.sum(self.data_sizes)
 
     def __getitem__(self, i):
         pass
@@ -216,8 +220,10 @@ class MultiVolumeDataset(data.Dataset):
 
 class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d']):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types)
+    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
+                 sampling_mode='uniform'):
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
+                         sampling_mode=sampling_mode)
 
         self.label_path = label_path
 
@@ -231,8 +237,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
                 target_size = np.asarray(np.multiply(labels.shape, scaling[k]), dtype=int)
                 labels = \
                     F.interpolate(torch.Tensor(labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
-                                  mode='area')[
-                        0, 0, ...].numpy()
+                                  mode='area')[0, 0, ...].numpy()
 
             self.labels.append(labels)
 
@@ -241,7 +246,10 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     def __getitem__(self, i):
 
         # select dataset
-        k = np.random.randint(0, len(self.data))
+        if self.sampling_mode is 'uniform':
+            k = np.random.randint(0, len(self.data))
+        else:
+            k = np.random.choice(len(self.data), p=self.data_sizes)
 
         # get random sample
         input, target = sample_labeled_input(self.data[k], self.labels[k], self.input_shape)
@@ -258,15 +266,20 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
 class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
 
-    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d'):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types)
+    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d',
+                 sampling_mode='uniform'):
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
+                         sampling_mode=sampling_mode)
 
         self.mu, self.std = self.get_stats()
 
     def __getitem__(self, i):
 
         # select dataset
-        k = np.random.randint(0, len(self.data))
+        if self.sampling_mode is 'uniform':
+            k = np.random.randint(0, len(self.data))
+        else:
+            k = np.random.choice(len(self.data), p=self.data_sizes)
 
         # get random sample
         input = sample_unlabeled_input(self.data[k], self.input_shape)
