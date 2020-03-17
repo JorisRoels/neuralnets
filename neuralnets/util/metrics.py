@@ -1,7 +1,5 @@
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, jaccard_score, precision_score, recall_score, \
-    f1_score
 
 
 def jaccard(y_true, y_pred, w=None):
@@ -23,7 +21,11 @@ def jaccard(y_true, y_pred, w=None):
     y_true = (y_true > 0.5).astype('int')
     y_pred = (y_pred > 0.5).astype('int')
 
-    return jaccard_score(y_true, y_pred)
+    # compute jaccard score
+    intersection = np.sum(y_true * y_pred)
+    union = np.sum(y_true) + np.sum(y_pred) - intersection
+
+    return intersection / union
 
 
 def dice(y_true, y_pred, w=None):
@@ -65,11 +67,17 @@ def accuracy_metrics(y_true, y_pred, w=None):
     y_pred = (y_pred > 0.5).astype('int')
 
     # compute accuracy metrics
-    accuracy = accuracy_score(y_true, y_pred)
-    balanced_accuracy = balanced_accuracy_score(y_true, y_pred)
-    precision = precision_score(y_true, y_pred)
-    recall = recall_score(y_true, y_pred)
-    f1 = f1_score(y_true, y_pred)
+    tp = np.sum(y_true * y_pred)
+    tn = np.sum((1 - y_true) * (1 - y_pred))
+    fp = np.sum((1 - y_true) * y_pred)
+    fn = np.sum(y_true * (1 - y_pred))
+    total = tp + tn + fp + fn
+    accuracy = (tp + tn) / total
+    recall = tp / (tp + fn)
+    specificity = tn / (tn + fp)
+    balanced_accuracy = (recall + specificity) / 2
+    precision = tp / (tp + fp)
+    f1 = 2 * (precision * recall) / (precision + recall)
 
     return accuracy, balanced_accuracy, precision, recall, f1
 
