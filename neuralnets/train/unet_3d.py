@@ -35,7 +35,7 @@ parser.add_argument("--print_stats", help="Number of iterations between each tim
 # network parameters
 parser.add_argument("--data_dir", help="Data directory", type=str, default="../../../data")
 parser.add_argument("--input_size", help="Size of the blocks that propagate through the network",
-                    type=str, default="32,32,32")
+                    type=str, default="16,128,128")
 parser.add_argument("--fm", help="Number of initial feature maps in the segmentation U-Net", type=int, default=16)
 parser.add_argument("--levels", help="Number of levels in the segmentation U-Net (i.e. number of pooling stages)",
                     type=int, default=4)
@@ -77,8 +77,9 @@ if not os.path.exists(args.log_dir):
 print('[%s] Loading data' % (datetime.datetime.now()))
 cuda = torch.cuda.is_available()
 augmenter = Compose([ToFloatTensor(cuda=cuda), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5),
-                     RandomDeformation_3D(args.input_size, cuda=cuda, include_segmentation=True),
-                     AddNoise(sigma_max=10, include_segmentation=True)])
+                     ContrastAdjust(adj=0.1, include_segmentation=True),
+                     RandomDeformation_3D(args.input_size[1:], grid_size=(64, 64), sigma=0.01, cuda=cuda, include_segmentation=True),
+                     AddNoise(sigma_max=0.05, include_segmentation=True)])
 train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/training.tif'),
                                      os.path.join(args.data_dir, 'EM/EPFL/training_groundtruth.tif'),
                                      input_shape=args.input_size, len_epoch=args.len_epoch)

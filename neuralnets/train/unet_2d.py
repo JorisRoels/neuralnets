@@ -78,8 +78,9 @@ input_shape = (1, args.input_size[0], args.input_size[1])
 print('[%s] Loading data' % (datetime.datetime.now()))
 cuda = torch.cuda.is_available()
 augmenter = Compose([ToFloatTensor(cuda=cuda), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5),
-                     RandomDeformation_2D(input_shape[1:], cuda=cuda, include_segmentation=True),
-                     AddNoise(sigma_max=10, include_segmentation=True)])
+                     ContrastAdjust(adj=0.1, include_segmentation=True),
+                     RandomDeformation_2D(input_shape[1:], grid_size=(64, 64), sigma=0.01, cuda=cuda, include_segmentation=True),
+                     AddNoise(sigma_max=0.05, include_segmentation=True)])
 train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/training.tif'),
                                      os.path.join(args.data_dir, 'EM/EPFL/training_groundtruth.tif'),
                                      input_shape=input_shape, len_epoch=args.len_epoch)

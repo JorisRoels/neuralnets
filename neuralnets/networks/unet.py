@@ -600,12 +600,10 @@ class UNet3D(nn.Module):
 
             # log images if necessary
             if write_images:
-                x = x[:, :, x.size(2)//2, :, :]
-                y = y[:, :, y.size(2)//2, :, :]
-                y_pred = y_pred[:, :, y_pred.size(2)//2, :, :]
-                x = vutils.make_grid(x, normalize=True, scale_each=True)
-                y = vutils.make_grid(y, normalize=y.max() - y.min() > 0, scale_each=True)
-                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, :, :].data,
+                s = x.size(2) // 2
+                x = vutils.make_grid(x[:, :, s, :, :], normalize=True, scale_each=True)
+                y = vutils.make_grid(y[:, :, s, :, :], normalize=y.max() - y.min() > 0, scale_each=True)
+                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, s, :, :].data,
                                           normalize=y_pred.max() - y_pred.min() > 0, scale_each=True)
                 writer.add_image('train/x', x, epoch)
                 writer.add_image('train/y', y, epoch)
@@ -633,14 +631,11 @@ class UNet3D(nn.Module):
 
         # keep track of the average loss and metrics during the epoch
         loss_cum = 0.0
-        j_cum = 0.0
-        a_cum = 0.0
-        p_cum = 0.0
-        r_cum = 0.0
-        f_cum = 0.0
         cnt = 0
 
         # test loss
+        y_preds = []
+        ys = []
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -661,22 +656,17 @@ class UNet3D(nn.Module):
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
-            # compute other interesting metrics
-            y_ = F.softmax(y_pred, dim=1).data.cpu().numpy()[:, 1, ...]
-            j_cum += jaccard(y_, y.cpu().numpy())
-            a, p, r, f = accuracy_metrics(y_, y.cpu().numpy())
-            a_cum += a;
-            p_cum += p;
-            r_cum += r;
-            f_cum += f
+            y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[:, 1, ...])
+            ys.append(y[:, 0, ...].cpu().numpy())
+
+        # compute interesting metrics
+        y_preds = np.asarray(y_preds)
+        ys = np.asarray(ys)
+        j = jaccard(ys, y_preds)
+        a, ba, p, r, f = accuracy_metrics(ys, y_preds)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        j_avg = j_cum / cnt
-        a_avg = a_cum / cnt
-        p_avg = p_cum / cnt
-        r_avg = r_cum / cnt
-        f_avg = f_cum / cnt
         print('[%s] Epoch %5d - Average test loss: %.6f'
               % (datetime.datetime.now(), epoch, loss_avg))
 
@@ -685,20 +675,19 @@ class UNet3D(nn.Module):
 
             # always log scalars
             writer.add_scalar('test/loss-seg', loss_avg, epoch)
-            writer.add_scalar('test/jaccard', j_avg, epoch)
-            writer.add_scalar('test/accuracy', a_avg, epoch)
-            writer.add_scalar('test/precision', p_avg, epoch)
-            writer.add_scalar('test/recall', r_avg, epoch)
-            writer.add_scalar('test/f-score', f_avg, epoch)
+            writer.add_scalar('test/jaccard', j, epoch)
+            writer.add_scalar('test/accuracy', a, epoch)
+            writer.add_scalar('test/balanced_accuracy', ba, epoch)
+            writer.add_scalar('test/precision', p, epoch)
+            writer.add_scalar('test/recall', r, epoch)
+            writer.add_scalar('test/f-score', f, epoch)
 
             # log images if necessary
             if write_images:
-                x = x[:, :, x.size(2)//2, :, :]
-                y = y[:, :, y.size(2)//2, :, :]
-                y_pred = y_pred[:, :, y_pred.size(2)//2, :, :]
-                x = vutils.make_grid(x, normalize=True, scale_each=True)
-                y = vutils.make_grid(y, normalize=y.max() - y.min() > 0, scale_each=True)
-                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, :, :].data,
+                s = x.size(2) // 2
+                x = vutils.make_grid(x[:, :, s, :, :], normalize=True, scale_each=True)
+                y = vutils.make_grid(y[:, :, s, :, :], normalize=y.max() - y.min() > 0, scale_each=True)
+                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, s, :, :].data,
                                           normalize=y_pred.max() - y_pred.min() > 0, scale_each=True)
                 writer.add_image('test/x', x, epoch)
                 writer.add_image('test/y', y, epoch)

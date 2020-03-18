@@ -82,8 +82,7 @@ class AddChannelAxis(object):
 
 class AddNoise(object):
 
-    def __init__(self, prob=0.5, sigma_min=0.0, sigma_max=1.0, include_segmentation=False,
-                 include_weak_segmentation=False):
+    def __init__(self, prob=0.5, sigma_min=0.0, sigma_max=1.0, include_segmentation=False):
         """
         Adds noise to the input
         :param prob: probability of adding noise
@@ -95,7 +94,6 @@ class AddNoise(object):
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.include_segmentation = include_segmentation
-        self.include_weak_segmentation = include_weak_segmentation
 
     def __call__(self, x):
         """
@@ -138,6 +136,50 @@ class Normalize(object):
         :return: output tensor (N_1, N_2, N_3, ...)
         """
         return (x - self.mu) / self.std
+
+
+class ContrastAdjust(object):
+
+    def __init__(self, prob=1, adj=0.2, include_segmentation=False):
+        """
+        Normalizes the input
+        :param prob: probability of adjusting contrast
+        :param adj: maximum adjustment (maximum intensity shift for minimum and maximum the new histogram)
+        :param include_segmentation: 2nd half of the batch will not be augmented as this is assumed to be a (partial) segmentation
+        """
+        self.prob = prob
+        self.adj = adj
+        self.include_segmentation = include_segmentation
+
+    def __call__(self, x):
+        """
+        Forward call
+        :param x: input tensor (N_1, N_2, N_3, ...)
+        :return: output tensor (N_1, N_2, N_3, ...)
+        """
+
+        if rnd.rand() < self.prob:
+            if self.include_segmentation:
+                m = x[:x.size(0) // 2, ...].min()
+                M = x[:x.size(0) // 2, ...].max()
+                m_ = 2 * self.adj * torch.rand(1) - self.adj + m
+                M_ = 2 * self.adj * torch.rand(1) - self.adj + M
+                if x.is_cuda:
+                    m_ = m_.cuda()
+                    M_ = M_.cuda()
+                x_adj = ((x[:x.size(0) // 2, ...] - m) / (M - m)) * (M_ - m_) + m_
+                return torch.cat((x_adj, x[x.size(0) // 2:, ...]), dim=0)
+            else:
+                m = x.min().cpu().numpy()
+                M = x.max().cpu().numpy()
+                m_ = 2 * self.adj * torch.rand() - self.adj + m
+                M_ = 2 * self.adj * torch.rand() - self.adj + M
+                if x.is_cuda:
+                    m_ = m_.cuda()
+                    M_ = M_.cuda()
+                return ((x - m) / (M - m)) * (M_ - m_) + m_
+        else:
+            return x
 
 
 class Scale(object):
@@ -394,7 +436,7 @@ class RandomCrop_3D(object):
 
 class RandomDeformation_2D(object):
 
-    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=8, sigma=0.01, n_grids=1000,
+    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
                  include_segmentation=False):
         """
         Apply random deformation to the inputs
@@ -402,7 +444,7 @@ class RandomDeformation_2D(object):
         :param prob: probability of deforming the data
         :param cuda: specifies whether the inputs are on the GPU
         :param points: seed points for deformation
-        :param grid_size: number of pixels between each grid point
+        :param grid_size: tuple with number of pixels between each grid point
         :param n_grids: number of grids to load in advance (chose more for higher variance in the data)
         :param include_segmentation: 2nd half of the batch needs casting to integers because of warping
         """
@@ -411,12 +453,11 @@ class RandomDeformation_2D(object):
         self.cuda = cuda
         self.grid_size = grid_size
         if points == None:
-            points = [shape[0] // self.grid_size, shape[1] // self.grid_size]
+            points = [shape[0] // self.grid_size[0], shape[1] // self.grid_size[1]]
         self.points = points
         self.sigma = sigma
         self.n_grids = n_grids
         self.grids = []
-        self.p = 10
         self.include_segmentation = include_segmentation
 
         i = np.linspace(-1, 1, shape[0])
@@ -479,7 +520,7 @@ class RandomDeformation_2D(object):
 
 class RandomDeformation_3D(object):
 
-    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=8, sigma=0.01, n_grids=1000,
+    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
                  include_segmentation=False):
         """
         Apply random deformation to the inputs
@@ -487,7 +528,7 @@ class RandomDeformation_3D(object):
         :param prob: probability of deforming the data
         :param cuda: specifies whether the inputs are on the GPU
         :param points: seed points for deformation
-        :param grid_size: number of pixels between each grid point
+        :param grid_size: tuple with number of pixels between each grid point
         :param n_grids: number of grids to load in advance (chose more for higher variance in the data)
         :param include_segmentation: 2nd half of the batch needs casting to integers because of warping
         """
@@ -496,21 +537,18 @@ class RandomDeformation_3D(object):
         self.cuda = cuda
         self.grid_size = grid_size
         if points == None:
-            points = [shape[0] // self.grid_size, shape[1] // self.grid_size, shape[2] // self.grid_size]
+            points = [shape[0] // self.grid_size[0], shape[1] // self.grid_size[1]]
         self.points = points
         self.sigma = sigma
         self.n_grids = n_grids
         self.grids = []
-        self.p = 10
         self.include_segmentation = include_segmentation
 
         i = np.linspace(-1, 1, shape[0])
         j = np.linspace(-1, 1, shape[1])
-        k = np.linspace(-1, 1, shape[2])
-        xv, yv, zv = np.meshgrid(k, i, j)
+        xv, yv = np.meshgrid(i, j)
 
-        grid = torch.cat(
-            (torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1), torch.Tensor(zv).unsqueeze(-1)), dim=-1)
+        grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
         grid = grid.unsqueeze(0)
         if cuda:
             grid = grid.cuda()
@@ -526,7 +564,7 @@ class RandomDeformation_3D(object):
         :return: deformation tensor
         """
         sigma = np.random.rand() * self.sigma
-        displacement = np.random.randn(*self.points, 3) * sigma
+        displacement = np.random.randn(*self.points, 2) * sigma
 
         # filter the displacement
         displacement_f = np.zeros_like(displacement)
@@ -535,9 +573,9 @@ class RandomDeformation_3D(object):
             displacement = displacement_f
 
         # resample to proper size
-        displacement_f = np.zeros((self.shape[0], self.shape[1], self.shape[2], 3))
+        displacement_f = np.zeros((self.shape[0], self.shape[1], 2))
         for d in range(0, displacement.ndim - 1):
-            displacement_f[:, :, :, d] = zoom(displacement[:, :, :, d], self.grid_size)
+            displacement_f[:, :, d] = zoom(displacement[:, :, d], self.grid_size)
 
         displacement = torch.Tensor(displacement_f).unsqueeze(0)
         if self.cuda:
@@ -555,8 +593,9 @@ class RandomDeformation_3D(object):
 
         if rnd.rand() < self.prob:
             grid = self.grids[rnd.randint(self.n_grids)]
-            grid = grid.repeat_interleave(x.size(0), dim=0)
-            x_aug = F.grid_sample(x, grid, padding_mode="border")
+            grid = grid.repeat_interleave(x.size(0)*x.size(2), dim=0)
+            x_aug = F.grid_sample(torch.reshape(x, (x.size(0)*x.size(2), x.size(1), x.size(3), x.size(4))), grid, padding_mode="border")
+            x_aug = torch.reshape(x_aug, x.size())
             if self.include_segmentation:
                 x_aug[x.size(0) // 2:, ...] = torch.round(x_aug[x.size(0) // 2:, ...])
             return x_aug
