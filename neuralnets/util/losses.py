@@ -9,26 +9,31 @@ from skimage import measure
 
 
 class CrossEntropyLoss(nn.Module):
+    """
+    Cross entropy loss function
+
+    :param initalization class_weight: weights for the classes
+    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
+    :param forward logits: logits tensor (B, C, N_1, N_2, ...)
+    :param forward target: targets tensor (B, N_1, N_2, ...)
+    :param forward weight: optional weight tensor (B, N_1, N_2, ...)
+    :return: cross entropy loss
+    """
 
     def __init__(self, class_weight=None, size_average=True):
-        """
-        Initialization of the cross entropy loss function
-        :param class_weight: weights for the classes
-        :param size_average: flag that specifies whether to apply size averaging at the end or not
-        """
 
         super(CrossEntropyLoss, self).__init__()
 
         self.class_weight = class_weight
         self.size_average = size_average
 
-    def forward(self, input, target, weight=None):
+    def forward(self, logits, target, weight=None):
 
         # apply log softmax
-        log_p = F.log_softmax(input, dim=1)
+        log_p = F.log_softmax(logits, dim=1)
 
         # channels on the last axis
-        input_size = input.size()
+        input_size = logits.size()
         for d in range(1, len(input_size) - 1):
             log_p = log_p.transpose(d, d + 1)
         log_p = log_p.contiguous()
@@ -52,43 +57,18 @@ class CrossEntropyLoss(nn.Module):
         return loss
 
 
-class CrossEntropyFTLoss(nn.Module):
-
-    def __init__(self, class_weight=None, size_average=True, lambda_src=0):
-        """
-        Initialization of the cross entropy loss function for finetuning
-        :param class_weight: weights for the classes
-        :param size_average: flag that specifies whether to apply size averaging at the end or not
-        :param lambda_src: source regularization parameter
-        """
-
-        super(CrossEntropyFTLoss, self).__init__()
-
-        self.ce = CrossEntropyLoss(class_weight=class_weight, size_average=size_average)
-        self.lambda_src = lambda_src
-
-    def forward(self, input_tar, target_tar, weight_tar=None, input_src=None, target_src=None, weight_src=None):
-
-        loss_tar = self.ce(input_tar, target_tar, weight=weight_tar)
-        if self.lambda_src > 0:
-            loss_src = self.ce(input_src, target_src, weight=weight_src)
-            loss = (1 - self.lambda_src) * loss_tar + self.lambda_src * loss_src
-        else:
-            loss_src = torch.Tensor([0])
-            loss = loss_tar
-
-        return loss, loss_tar, loss_src
-
-
 class LpLoss(nn.Module):
+    """
+    L_p loss function
+
+    :param initalization p: parameter for the loss function
+    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
+    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward target: targets tensor (N_1, N_2, ...)
+    :return: L_p loss
+    """
 
     def __init__(self, p=2, size_average=True):
-        """
-        Initialization of the Lp loss function
-        :param p: parameter for the loss function
-        :param size_average: normalize sums to means
-        """
-
         super(LpLoss, self).__init__()
 
         self.p = p
@@ -103,13 +83,16 @@ class LpLoss(nn.Module):
 
 
 class L2Loss(nn.Module):
+    """
+    L_2 loss function
+
+    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
+    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward target: targets tensor (N_1, N_2, ...)
+    :return: L_2 loss
+    """
 
     def __init__(self, size_average=True):
-        """
-        Initialization of the Lp loss function
-        :param size_average: normalize sums to means
-        """
-
         super(L2Loss, self).__init__()
 
         self.size_average = size_average
@@ -123,13 +106,16 @@ class L2Loss(nn.Module):
 
 
 class L1Loss(nn.Module):
+    """
+    L_1 loss function
+
+    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
+    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward target: targets tensor (N_1, N_2, ...)
+    :return: L_1 loss
+    """
 
     def __init__(self, size_average=True):
-        """
-        Initialization of the Lp loss function
-        :param size_average: normalize sums to means
-        """
-
         super(L1Loss, self).__init__()
 
         self.size_average = size_average
@@ -143,13 +129,16 @@ class L1Loss(nn.Module):
 
 
 class MSELoss(nn.Module):
+    """
+    Mean squared error (MSE) loss function
+
+    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
+    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward target: targets tensor (N_1, N_2, ...)
+    :return: MSE loss
+    """
 
     def __init__(self, size_average=True):
-        """
-        Initialization of the Lp loss function
-        :param size_average: normalize sums to means
-        """
-
         super(MSELoss, self).__init__()
 
         self.size_average = size_average
@@ -163,13 +152,16 @@ class MSELoss(nn.Module):
 
 
 class MADLoss(nn.Module):
+    """
+    Mean absolute deviation (MAD) loss function
+
+    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
+    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward target: targets tensor (N_1, N_2, ...)
+    :return: MAD loss
+    """
 
     def __init__(self, size_average=True):
-        """
-        Initialization of the Lp loss function
-        :param size_average: normalize sums to means
-        """
-
         super(MADLoss, self).__init__()
 
         self.size_average = size_average
@@ -183,6 +175,13 @@ class MADLoss(nn.Module):
 
 
 class KLDLoss(nn.Module):
+    """
+    Kullback Leibler divergence (KLD) loss function
+
+    :param forward mu: mean tensor (N_1, N_2, ...)
+    :param forward log: logarithmic variance tensor (N_1, N_2, ...)
+    :return: KLD loss
+    """
 
     def forward(self, mu, logvar):
 
@@ -198,6 +197,15 @@ class KLDLoss(nn.Module):
 
 
 def boundary_weight_map(labels, sigma=20, w0=1):
+    """
+    Compute the boundary weight map, according to the the original U-Net paper
+
+    :param labels: input tensor
+    :param optional sigma: damping parameter
+    :param optional w0: initial value of the weight map
+    :return boundary weight map as a tensor
+    """
+
     y = labels.cpu().numpy()
     weight = np.ones(y.shape)
     diag = np.sqrt(weight.shape[2] ** 2 + weight.shape[3] ** 2)

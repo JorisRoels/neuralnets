@@ -7,20 +7,18 @@ from scipy.ndimage import spline_filter1d, zoom
 
 
 class ToTensor(object):
+    """
+    Transforms a numpy array into a tensor
+
+    :param initalization cuda: specifies whether the tensor should be transfered to the GPU or not
+    :param forward x: input array (N_1, N_2, N_3, ...)
+    :return: output tensor (N_1, N_2, N_3, ...)
+    """
 
     def __init__(self, cuda=True):
-        """
-        Transforms a numpy array into a tensor
-        :param cuda: specifies whether the tensor should be transfered to the GPU or not
-        """
         self.cuda = cuda
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input array (N_1, N_2, N_3, ...)
-        :return: output tensor (N_1, N_2, N_3, ...)
-        """
         if self.cuda:
             return torch.Tensor(x).cuda()
         else:
@@ -28,20 +26,18 @@ class ToTensor(object):
 
 
 class ToFloatTensor(object):
+    """
+    Transforms a Tensor to a FloatTensor
+
+    :param initialization cuda: specifies whether the tensor should be transfered to the GPU or not
+    :param forward x: input array (N_1, N_2, N_3, ...)
+    :return: output tensor (N_1, N_2, N_3, ...)
+    """
 
     def __init__(self, cuda=True):
-        """
-        Transforms a Tensor to a FloatTensor
-        :param cuda: specifies whether the tensor should be transfered to the GPU or not
-        """
         self.cuda = cuda
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (N_1, N_2, N_3, ...)
-        :return: output tensor (N_1, N_2, N_3, ...)
-        """
         if self.cuda:
             return x.float().cuda()
         else:
@@ -49,20 +45,18 @@ class ToFloatTensor(object):
 
 
 class ToLongTensor(object):
+    """
+    Transforms a Tensor to a LongTensor
+
+    :param initialization cuda: specifies whether the tensor should be transfered to the GPU or not
+    :param forward x: input array (N_1, N_2, N_3, ...)
+    :return: output tensor (N_1, N_2, N_3, ...)
+    """
 
     def __init__(self, cuda=True):
-        """
-        Transforms a Tensor to a LongTensor
-        :param cuda: specifies whether the tensor should be transfered to the GPU or not
-        """
         self.cuda = cuda
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (N_1, N_2, N_3, ...)
-        :return: output tensor (N_1, N_2, N_3, ...)
-        """
         if self.cuda:
             return x.long().cuda()
         else:
@@ -70,37 +64,37 @@ class ToLongTensor(object):
 
 
 class AddChannelAxis(object):
+    """
+    Add a channel to the input tensor
+
+    :param initialization cuda: specifies whether the tensor should be transfered to the GPU or not
+    :param forward x: input tensor (N_1, N_2, N_3, ...)
+    :return: output tensor (N_1, N_2, N_3, ...)
+    """
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (N_1, N_2, N_3, ...)
-        :return: output tensor (1, N_1, N_2, N_3, ...)
-        """
         return x.unsqueeze(0)
 
 
 class AddNoise(object):
+    """
+    Adds noise to the input
+
+    :param initialization prob: probability of adding noise
+    :param initialization sigma_min: minimum noise standard deviation
+    :param initialization sigma_max: maximum noise standard deviation
+    :param initialization include_segmentation: 2nd half of the batch will not be augmented as this is assumed to be a (partial) segmentation
+    :param forward x: input tensor (B, N_1, N_2, ...)
+    :return: output tensor (B, N_1, N_2, ...)
+    """
 
     def __init__(self, prob=0.5, sigma_min=0.0, sigma_max=1.0, include_segmentation=False):
-        """
-        Adds noise to the input
-        :param prob: probability of adding noise
-        :param sigma_min: minimum noise standard deviation
-        :param sigma_max: maximum noise standard deviation
-        :param include_segmentation: 2nd half of the batch will not be augmented as this is assumed to be a (partial) segmentation
-        """
         self.prob = prob
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.include_segmentation = include_segmentation
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, N_1, N_2, ...)
-        :return: output tensor (B, N_1, N_2, ...)
-        """
 
         if rnd.rand() < self.prob:
             sigma = rnd.uniform(self.sigma_min, self.sigma_max)
@@ -119,44 +113,40 @@ class AddNoise(object):
 
 
 class Normalize(object):
+    """
+    Normalizes the input
+
+    :param initialization mu: mean of the normalization
+    :param initialization std: standard deviation of the normalization
+    :param forward x: input tensor (N_1, N_2, N_3, ...)
+    :return: output tensor (N_1, N_2, N_3, ...)
+    """
 
     def __init__(self, mu=0, std=1):
-        """
-        Normalizes the input
-        :param mu: mean of the normalization
-        :param std: standard deviation of the normalization
-        """
         self.mu = mu
         self.std = std
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (N_1, N_2, N_3, ...)
-        :return: output tensor (N_1, N_2, N_3, ...)
-        """
         return (x - self.mu) / self.std
 
 
 class ContrastAdjust(object):
+    """
+    Apply contrast adjustments to the data
+
+    :param initialization prob: probability of adjusting contrast
+    :param initialization adj: maximum adjustment (maximum intensity shift for minimum and maximum the new histogram)
+    :param initialization include_segmentation: 2nd half of the batch will not be augmented as this is assumed to be a (partial) segmentation
+    :param forward x: input tensor (N_1, N_2, N_3, ...)
+    :return: output tensor (N_1, N_2, N_3, ...)
+    """
 
     def __init__(self, prob=1, adj=0.2, include_segmentation=False):
-        """
-        Normalizes the input
-        :param prob: probability of adjusting contrast
-        :param adj: maximum adjustment (maximum intensity shift for minimum and maximum the new histogram)
-        :param include_segmentation: 2nd half of the batch will not be augmented as this is assumed to be a (partial) segmentation
-        """
         self.prob = prob
         self.adj = adj
         self.include_segmentation = include_segmentation
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (N_1, N_2, N_3, ...)
-        :return: output tensor (N_1, N_2, N_3, ...)
-        """
 
         if rnd.rand() < self.prob:
             if self.include_segmentation:
@@ -183,21 +173,19 @@ class ContrastAdjust(object):
 
 
 class Scale(object):
+    """
+    Scales the input by a specific factor (randomly selected from a minimum-maximum range)
+
+    :param initialization scale_factor: minimum and maximum scaling factor
+    :param forward x: input tensor (B, C, [Z  , Y  ,] X)
+    :return: output tensor (B, C, [Z' , Y' ,] X)
+    """
 
     def __init__(self, scale_factor=(0.5, 1.5), mode='bilinear'):
-        """
-        Scales the input by a specific factor (randomly selected from a minimum-maximum range)
-        :param scale_factor: minimum and maximum scaling factor
-        """
         self.scale_factor = scale_factor
         self.mode = mode
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, [Z  , Y  ,] X)
-        :return: output tensor (B, C, [Z' , Y' ,] X)
-        """
         if type(self.scale_factor) == tuple:
             scale_factor = (self.scale_factor[1] - self.scale_factor[0]) * np.random.random_sample() + \
                            self.scale_factor[0]
@@ -207,20 +195,18 @@ class Scale(object):
 
 
 class FlipX(object):
+    """
+    Perform a flip along the X axis
+
+    :param initialization prob: probability of flipping
+    :param forward x: input tensor (B, C, N_1, N_2, ...)
+    :return: output tensor (B, C, N_1, N_2, ...)
+    """
 
     def __init__(self, prob=1):
-        """
-        Perform a flip along the X axis
-        :param prob: probability of flipping
-        """
         self.prob = prob
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, N_1, N_2, ...)
-        :return: output tensor (B, C, N_1, N_2, ...)
-        """
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
@@ -230,20 +216,18 @@ class FlipX(object):
 
 
 class FlipY(object):
+    """
+    Perform a flip along the Y axis
+
+    :param initialization prob: probability of flipping
+    :param forward x: input tensor (B, C, N_1, N_2, ...)
+    :return: output tensor (B, C, N_1, N_2, ...)
+    """
 
     def __init__(self, prob=1):
-        """
-        Perform a flip along the Y axis
-        :param prob: probability of flipping
-        """
         self.prob = prob
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, N_1, N_2, ...)
-        :return: output tensor (B, C, N_1, N_2, ...)
-        """
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
@@ -253,20 +237,18 @@ class FlipY(object):
 
 
 class FlipZ(object):
+    """
+    Perform a flip along the Z axis
+
+    :param initialization prob: probability of flipping
+    :param forward x: input tensor (B, C, N_1, N_2, ...)
+    :return: output tensor (B, C, N_1, N_2, ...)
+    """
 
     def __init__(self, prob=1):
-        """
-        Perform a flip along the Z axis
-        :param prob: probability of flipping
-        """
         self.prob = prob
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, N_1, N_2, ...)
-        :return: output tensor (B, C, N_1, N_2, ...)
-        """
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
@@ -276,20 +258,18 @@ class FlipZ(object):
 
 
 class Rotate90(object):
+    """
+    Rotate the inputs by 90 degree angles
+
+    :param initialization prob: probability of rotating
+    :param forward x: input tensor (B, C, N_1, N_2, ...)
+    :return: output tensor (B, C, N_1, N_2, ...)
+    """
 
     def __init__(self, prob=1):
-        """
-        Rotate the inputs by 90 degree angles
-        :param prob: probability of rotating
-        """
         self.prob = prob
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, N_1, N_2, ...)
-        :return: output tensor (B, C, N_1, N_2, ...)
-        """
 
         if rnd.rand() < self.prob:
             n = x.ndimension()
@@ -299,17 +279,20 @@ class Rotate90(object):
 
 
 class RotateRandom_2D(object):
+    """
+    Rotate the inputs by a random amount of degrees within interval.
 
-    def __init__(self, shape, prob=1.0, range_=200, cuda=True):
-        """
-        Rotate the inputs by a random amount of degrees within interval.
-        :param shape: 2D shape of the input image
-        :param range_: random degree interval size (symmetric around 0)
-        :param cuda: specify whether the inputs are on the GPU.
-        """
+    :param initialization shape: 2D shape of the input image
+    :param initialization rng: random degree interval size (symmetric around 0)
+    :param initialization cuda: specify whether the inputs are on the GPU.
+    :param forward x: input tensor (B, C, Y , X)
+    :return: output tensor (B, C, Y , X)
+    """
+
+    def __init__(self, shape, prob=1.0, rng=200, cuda=True):
         self.shape = tuple(shape)
         self.cuda = cuda
-        self.range = int(range_ / 2)
+        self.rng = int(rng / 2)
         self.prob = prob
         self.image_center = int(self.shape[0] / 2), int(self.shape[1] / 2)
 
@@ -318,7 +301,7 @@ class RotateRandom_2D(object):
         self.xv, self.yv = np.meshgrid(i, j)
 
     def _rotation_grid(self):
-        angle = np.random.randint(-self.range, self.range)
+        angle = np.random.randint(-self.rng, self.rng)
         rot_matrix = cv2.getRotationMatrix2D(self.image_center, angle, 1.0)
         xv = cv2.warpAffine(self.xv, rot_matrix, self.xv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
         yv = cv2.warpAffine(self.yv, rot_matrix, self.yv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
@@ -330,11 +313,6 @@ class RotateRandom_2D(object):
         return grid
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Y , X)
-        :return: output tensor (B, C, Y , X)
-        """
 
         if rnd.rand() < self.prob:
             grid = self._rotation_grid()
@@ -345,17 +323,20 @@ class RotateRandom_2D(object):
 
 
 class RotateRandom_3D(object):
+    """
+    Rotate the inputs by a random amount of degrees within interval.
 
-    def __init__(self, shape, prob=1.0, range_=200, cuda=True):
-        """
-        Rotate the inputs by a random amount of degrees within interval.
-        :param shape: 3D shape of the input image
-        :param range_: random degree interval size (symmetric around 0)
-        :param cuda: specify whether the inputs are on the GPU.
-        """
+    :param initialization shape: 3D shape of the input image
+    :param initialization rng: random degree interval size (symmetric around 0)
+    :param initialization cuda: specify whether the inputs are on the GPU.
+    :param forward x: input tensor (B, C, Z, Y , X)
+    :return: output tensor (B, C, Z, Y , X)
+    """
+
+    def __init__(self, shape, prob=1.0, rng=200, cuda=True):
         self.shape = tuple(shape)
         self.cuda = cuda
-        self.range = int(range_ / 2)
+        self.rng = int(rng / 2)
         self.prob = prob
         self.image_center = int(self.shape[0] / 2), int(self.shape[1] / 2), int(self.shape[2] / 2)
 
@@ -365,7 +346,7 @@ class RotateRandom_3D(object):
         self.xv, self.yv, self.zv = np.meshgrid(i, j, k)
 
     def _rotation_grid(self):
-        angle = np.random.randint(-self.range, self.range)
+        angle = np.random.randint(-self.rng, self.rng)
         rot_matrix = cv2.getRotationMatrix2D(self.image_center, angle, 1.0)
         xv = cv2.warpAffine(self.xv, rot_matrix, self.xv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
         yv = cv2.warpAffine(self.yv, rot_matrix, self.yv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
@@ -379,11 +360,6 @@ class RotateRandom_3D(object):
         return grid
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Z, Y , X)
-        :return: output tensor (B, C, Z, Y , X)
-        """
 
         if rnd.rand() < self.prob:
             grid = self._rotation_grid()
@@ -394,40 +370,36 @@ class RotateRandom_3D(object):
 
 
 class RandomCrop_2D(object):
+    """
+    Selects a random crop from the input
+
+    :param initialization crop_shape: 2D shape of the crop
+    :param forward x: input tensor (B, C, Y , X)
+    :return: output tensor (B, C, Y', X')
+    """
 
     def __init__(self, crop_shape):
-        """
-        Selects a random crop from the input
-        :param crop_shape: 2D shape of the crop
-        """
         self.crop_shape = crop_shape
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Y , X)
-        :return: output tensor (B, C, Y', X')
-        """
         r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
         c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
         return x[:, :, r:r + self.crop_shape[0], c:c + self.crop_shape[1]]
 
 
 class RandomCrop_3D(object):
+    """
+    Selects a random crop from the input
+
+    :param initialization crop_shape: 3D shape of the crop
+    :param forward x: input tensor (B, C, Z, Y , X)
+    :return: output tensor (B, C, Z', Y', X')
+    """
 
     def __init__(self, crop_shape):
-        """
-        Selects a random crop from the input
-        :param crop_shape: 3D shape of the crop
-        """
         self.crop_shape = crop_shape
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Z , Y , X)
-        :return: output tensor (B, C, Z', Y', X')
-        """
         r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
         c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
         z = np.random.randint(0, x.size(4) - self.crop_shape[2] + 1)
@@ -435,19 +407,22 @@ class RandomCrop_3D(object):
 
 
 class RandomDeformation_2D(object):
+    """
+    Apply random deformation to the inputs
+
+    :param initialization shape: shape of the inputs
+    :param initialization prob: probability of deforming the data
+    :param initialization cuda: specifies whether the inputs are on the GPU
+    :param initialization points: seed points for deformation
+    :param initialization grid_size: tuple with number of pixels between each grid point
+    :param initialization n_grids: number of grids to load in advance (chose more for higher variance in the data)
+    :param initialization include_segmentation: 2nd half of the batch needs casting to integers because of warping
+    :param forward x: input tensor (B, C, Y , X)
+    :return: output tensor (B, C, Y, X)
+    """
 
     def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
                  include_segmentation=False):
-        """
-        Apply random deformation to the inputs
-        :param shape: shape of the inputs
-        :param prob: probability of deforming the data
-        :param cuda: specifies whether the inputs are on the GPU
-        :param points: seed points for deformation
-        :param grid_size: tuple with number of pixels between each grid point
-        :param n_grids: number of grids to load in advance (chose more for higher variance in the data)
-        :param include_segmentation: 2nd half of the batch needs casting to integers because of warping
-        """
         self.shape = shape
         self.prob = prob
         self.cuda = cuda
@@ -475,10 +450,6 @@ class RandomDeformation_2D(object):
             self.grids.append(self._deformation_grid())
 
     def _deformation_grid(self):
-        """
-        Get a new random deformation grid
-        :return: deformation tensor
-        """
         sigma = np.random.rand() * self.sigma
         displacement = np.random.randn(*self.points, 2) * sigma
 
@@ -501,11 +472,6 @@ class RandomDeformation_2D(object):
         return grid
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Y , X)
-        :return: output tensor (B, C, Y , X)
-        """
 
         if rnd.rand() < self.prob:
             grid = self.grids[rnd.randint(self.n_grids)]
@@ -519,19 +485,22 @@ class RandomDeformation_2D(object):
 
 
 class RandomDeformation_3D(object):
+    """
+    Apply random deformation to the inputs
+
+    :param initialization shape: shape of the inputs
+    :param initialization prob: probability of deforming the data
+    :param initialization cuda: specifies whether the inputs are on the GPU
+    :param initialization points: seed points for deformation
+    :param initialization grid_size: tuple with number of pixels between each grid point
+    :param initialization n_grids: number of grids to load in advance (chose more for higher variance in the data)
+    :param initialization include_segmentation: 2nd half of the batch needs casting to integers because of warping
+    :param forward x: input tensor (B, C, Z, Y , X)
+    :return: output tensor (B, C, Z, Y, X)
+    """
 
     def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
                  include_segmentation=False):
-        """
-        Apply random deformation to the inputs
-        :param shape: shape of the inputs
-        :param prob: probability of deforming the data
-        :param cuda: specifies whether the inputs are on the GPU
-        :param points: seed points for deformation
-        :param grid_size: tuple with number of pixels between each grid point
-        :param n_grids: number of grids to load in advance (chose more for higher variance in the data)
-        :param include_segmentation: 2nd half of the batch needs casting to integers because of warping
-        """
         self.shape = shape
         self.prob = prob
         self.cuda = cuda
@@ -559,10 +528,6 @@ class RandomDeformation_3D(object):
             self.grids.append(self._deformation_grid())
 
     def _deformation_grid(self):
-        """
-        Get a new random deformation grid
-        :return: deformation tensor
-        """
         sigma = np.random.rand() * self.sigma
         displacement = np.random.randn(*self.points, 2) * sigma
 
@@ -585,16 +550,12 @@ class RandomDeformation_3D(object):
         return grid
 
     def __call__(self, x):
-        """
-        Forward call
-        :param x: input tensor (B, C, Z, Y , X)
-        :return: output tensor (B, C, Z, Y , X)
-        """
 
         if rnd.rand() < self.prob:
             grid = self.grids[rnd.randint(self.n_grids)]
-            grid = grid.repeat_interleave(x.size(0)*x.size(2), dim=0)
-            x_aug = F.grid_sample(torch.reshape(x, (x.size(0)*x.size(2), x.size(1), x.size(3), x.size(4))), grid, padding_mode="border")
+            grid = grid.repeat_interleave(x.size(0) * x.size(2), dim=0)
+            x_aug = F.grid_sample(torch.reshape(x, (x.size(0) * x.size(2), x.size(1), x.size(3), x.size(4))), grid,
+                                  padding_mode="border")
             x_aug = torch.reshape(x_aug, x.size())
             if self.include_segmentation:
                 x_aug[x.size(0) // 2:, ...] = torch.round(x_aug[x.size(0) // 2:, ...])

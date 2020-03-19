@@ -9,6 +9,7 @@ import tifffile as tiff
 def read_volume(file, type='tif3d', key=None, start=0, stop=-1):
     """
     Reads a volume file/directory and returns the data in it as a numpy array
+
     :param file: path to the data
     :param type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param key: key to the data (only necessary for hdf5 files)
@@ -36,6 +37,7 @@ def read_volume(file, type='tif3d', key=None, start=0, stop=-1):
 def read_tif(file, dtype='uint8'):
     """
     Reads tif formatted file and returns the data in it as a numpy array
+
     :param file: path to the tif file
     :param dtype: data type of the numpy array
     :return: numpy array containing the data
@@ -49,6 +51,7 @@ def read_tif(file, dtype='uint8'):
 def read_tifseq(dir, dtype='uint8', start=0, stop=-1):
     """
     Read a sequence of 2D TIF files
+
     :param dir: directory that contains the files
     :param dtype: data type of the output
     :param start: first slice to read
@@ -70,6 +73,7 @@ def read_tifseq(dir, dtype='uint8', start=0, stop=-1):
 def read_hdf5(file, dtype='uint8', key=None):
     """
     Reads an HDF5 file as a numpy array
+
     :param file: path to the hdf5 file
     :param dtype: data type of the numpy array
     :param key: key in the hfd5 file that provides access to the data
@@ -85,6 +89,7 @@ def read_hdf5(file, dtype='uint8', key=None):
 def read_png(file, dtype='uint8'):
     """
     Read a 2D PNG file
+
     :param file: file to be read
     :param dtype: data type of the output
     """
@@ -97,6 +102,7 @@ def read_png(file, dtype='uint8'):
 def read_jpg(file, dtype='uint8'):
     """
     Read a 2D JPG file
+
     :param file: file to be read
     :param dtype: data type of the output
     """
@@ -109,6 +115,7 @@ def read_jpg(file, dtype='uint8'):
 def read_pngseq(dir, dtype='uint8', start=0, stop=-1):
     """
     Read a sequence of 2D PNG files
+
     :param dir: directory that contains the files
     :param dtype: data type of the output
     :param start: first slice to read
@@ -130,6 +137,7 @@ def read_pngseq(dir, dtype='uint8', start=0, stop=-1):
 def write_volume(data, file, type='tif3d', start=0, stop=-1, K=4):
     """
     Writes a numpy array to a volume file/directory
+
     :param data: 2D/3D numpy array
     :param file: path to the data
     :param type: type of the volume file (tif2d, tif3d, tifseq, png or pngseq)
@@ -151,6 +159,7 @@ def write_volume(data, file, type='tif3d', start=0, stop=-1, K=4):
 def write_tif(x, file, dtype='uint8'):
     """
     Write a 2D/3D data set as a TIF file
+
     :param x: 2D/3D data array
     :param file: directory to write the data to
     :param dtype: data type of the output
@@ -162,6 +171,7 @@ def write_tif(x, file, dtype='uint8'):
 def write_png(x, file):
     """
     Write a 2D data set to a PNG file
+
     :param x: 3D data array
     :param file: directory to write the data to
     """
@@ -172,6 +182,7 @@ def write_png(x, file):
 def write_jpg(x, file, quality=100):
     """
     Write a 2D data set to a JPEG file
+
     :param x: 3D data array
     :param file: directory to write the data to
     :param quality: quality of the JPEG compression (0-100)
@@ -183,6 +194,7 @@ def write_jpg(x, file, quality=100):
 def write_tifseq(x, dir, prefix='', start=0, stop=-1, dtype='uint8', K=4):
     """
     Write a 3D data set to a directory, slice by slice, as TIF files
+
     :param x: 3D data array
     :param dir: directory to write the data to
     :param prefix: prefix of the separate files
@@ -197,13 +209,14 @@ def write_tifseq(x, dir, prefix='', start=0, stop=-1, dtype='uint8', K=4):
     if stop < 0:
         stop = x.shape[0]
     for i in range(start, stop):
-        i_str = num2str(i, K=K)
+        i_str = _num2str(i, K=K)
         tiff.imsave(dir + '/' + prefix + i_str + '.tif', (x[i, :, :]).astype(dtype))
 
 
 def write_pngseq(x, dir, prefix='', start=0, stop=-1, K=4):
     """
     Write a 3D data set to a directory, slice by slice, as PNG files
+
     :param x: 3D data array
     :param dir: directory to write the data to
     :param prefix: prefix of the separate files
@@ -217,12 +230,12 @@ def write_pngseq(x, dir, prefix='', start=0, stop=-1, K=4):
     if stop < 0:
         stop = x.shape[0]
     for i in range(start, stop):
-        i_str = num2str(i, K=K)
+        i_str = _num2str(i, K=K)
         cv2.imwrite(dir + '/' + prefix + i_str + '.png', (x[i, :, :]).astype('uint8'),
                     [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
 
-def num2str(n, K=4):
+def _num2str(n, K=4):
     n_str = str(n)
     for k in range(0, K - len(n_str)):
         n_str = '0' + n_str

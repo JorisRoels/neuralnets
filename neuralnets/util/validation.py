@@ -14,6 +14,7 @@ from neuralnets.util.tools import gaussian_window
 def sliding_window_multichannel(image, step_size, window_size, track_progress=False):
     """
     Iterator that acts as a sliding window over a multichannel 3D image
+
     :param image: multichannel image (4D array)
     :param step_size: step size of the sliding window (3-tuple)
     :param window_size: size of the window (3-tuple)
@@ -55,6 +56,7 @@ def sliding_window_multichannel(image, step_size, window_size, track_progress=Fa
 def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False):
     """
     Segment a multichannel 3D image using a specific network
+
     :param data: 4D array (C, Z, Y, X) representing the multichannel 3D image
     :param net: image-to-image segmentation network
     :param input_shape: size of the inputs (either 2 or 3-tuple)
@@ -187,6 +189,7 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
 def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False):
     """
     Segment a 3D image using a specific network
+
     :param data: 3D array (Z, Y, X) representing the 3D image
     :param net: image-to-image segmentation network
     :param input_shape: size of the inputs (either 2 or 3-tuple)
@@ -205,6 +208,7 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
              writer=None, epoch=0, track_progress=False):
     """
     Validate a network on a dataset and its labels
+
     :param net: image-to-image segmentation network
     :param data: 3D array (Z, Y, X) representing the 3D image
     :param labels: 3D array (Z, Y, X) representing the 3D labels

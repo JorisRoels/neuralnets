@@ -10,6 +10,7 @@ from neuralnets.util.io import read_volume
 def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq', data_shape=None):
     """
     Generate an input and target sample of certain shape from a labeled dataset
+
     :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param labels: labels to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param input_shape: (z, x, y) shape of the sample
@@ -47,6 +48,7 @@ def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq
 def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', data_shape=None):
     """
     Generate an input sample of certain shape from an unlabeled dataset
+
     :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param input_shape: (z, x, y) shape of the sample
     :param preloaded: boolean that specifies whether the data is already in RAM
@@ -80,6 +82,7 @@ def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', dat
 def gaussian_window(size, sigma=1):
     """
     Returns a 3D Gaussian window that can be used for window weighting and merging
+
     :param size: size of the window
     :param sigma: standard deviation of the gaussian
     :return: the Gaussian window
@@ -116,6 +119,7 @@ def gaussian_window(size, sigma=1):
 def load_net(model_file):
     """
     Load a pretrained pytorch network
+
     :param model_file: path to the checkpoint
     :return: a module that corresponds to the trained network
     """
@@ -125,6 +129,7 @@ def load_net(model_file):
 def set_seed(seed):
     """
     Sets the seed of all randomized modules (useful for reproducibility)
+
     :param seed: seed number
     """
     np.random.seed(seed)

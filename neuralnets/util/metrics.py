@@ -5,6 +5,7 @@ from scipy.spatial.distance import directed_hausdorff
 def jaccard(y_true, y_pred, w=None):
     """
     Jaccard index between two segmentations
+
     :param y_true: (N1, N2, ...) array of the true labels
     :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
     :param w: (N1, N2, ...) masking array
@@ -31,6 +32,7 @@ def jaccard(y_true, y_pred, w=None):
 def dice(y_true, y_pred, w=None):
     """
     Dice coefficient between two segmentations
+
     :param y_true: (N1, N2, ...) array of the true labels
     :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
     :param w: (N1, N2, ...) masking array
@@ -44,12 +46,8 @@ def dice(y_true, y_pred, w=None):
 
 def accuracy_metrics(y_true, y_pred, w=None):
     """
-    Accuracy metrics between two segmentations:
-        - Accuracy
-        - Balanced accuracy
-        - Precision
-        - Recall
-        - F1-score
+    Accuracy metrics between two segmentations (accuracy, balanced accuracy, precision, recall and f1-score)
+
     :param y_true: (N1, N2, ...) array of the true labels
     :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
     :param w: (N1, N2, ...) masking array
@@ -85,6 +83,7 @@ def accuracy_metrics(y_true, y_pred, w=None):
 def hausdorff_distance(x, y):
     """
     Hausdorff distance between two segmentations
+
     :param x: array
     :param y: array
     :return: the hausdorff distance

@@ -12,15 +12,26 @@ from torch.utils.tensorboard import SummaryWriter
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D
 
 
-def reparametrise(mu, logvar):
+def _reparametrise(mu, logvar):
     std = logvar.div(2).exp()
     eps = Variable(std.data.new(std.size()).normal_())
 
     return mu + std * eps
 
 
-# 2D convolutional encoder
 class Encoder(nn.Module):
+    """
+    2D convolutional encoder
+
+    :param optional input_size: size of the inputs that propagate through the encoder
+    :param optional bottleneck_dim: dimensionality of the bottleneck
+    :param optional in_channels: number of input channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional dropout: dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    """
 
     def __init__(self, input_size=512, bottleneck_dim=2, in_channels=1, feature_maps=64, levels=5, norm='instance',
                  dropout=0.0, activation='relu'):
@@ -71,8 +82,19 @@ class Encoder(nn.Module):
         return encoder_outputs, outputs
 
 
-# 2D convolutional decoder
 class Decoder(nn.Module):
+    """
+    2D convolutional decoder
+
+    :param optional input_size: size of the inputs that propagate through the encoder
+    :param optional bottleneck_dim: dimensionality of the bottleneck
+    :param optional out_channels: number of output channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional dropout: dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    """
 
     def __init__(self, input_size=512, bottleneck_dim=2, out_channels=2, feature_maps=64, levels=5,
                  norm='instance', dropout=0.0, activation='relu'):
@@ -134,13 +156,24 @@ class Decoder(nn.Module):
         return decoder_outputs, outputs
 
 
-# 2D convolutional beta variational autoencoder
 class BVAE(nn.Module):
+    """
+    2D beta variational autoencoder (VAE)
+
+    :param optional beta: beta value of the autoencoder (beta=1 results in the classical VAE)
+    :param optional input_size: size of the inputs that propagate through the encoder
+    :param optional bottleneck_dim: dimensionality of the bottleneck
+    :param optional in_channels: number of input channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional dropout_enc: encoder dropout factor
+    :param optional dropout_dec: decoder dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    """
 
     def __init__(self, beta=1, input_size=512, bottleneck_dim=2, in_channels=1, out_channels=2, feature_maps=64,
-                 levels=5,
-                 norm='instance',
-                 activation='relu', dropout_enc=0.0, dropout_dec=0.0):
+                 levels=5, norm='instance', activation='relu', dropout_enc=0.0, dropout_dec=0.0):
         super(BVAE, self).__init__()
 
         self.beta = beta
@@ -170,7 +203,7 @@ class BVAE(nn.Module):
         logvar = bottleneck[:, self.bottleneck_dim:]
 
         # reparameterization
-        z = reparametrise(mu, logvar)
+        z = _reparametrise(mu, logvar)
 
         # expansive path
         decoder_outputs, outputs = self.decoder(z, encoder_outputs)
@@ -312,7 +345,7 @@ class BVAE(nn.Module):
 
             # forward prop
             x_pred, mu, logvar = self(x)
-            z.append(reparametrise(mu, logvar).cpu().data.numpy())
+            z.append(_reparametrise(mu, logvar).cpu().data.numpy())
             li.append(x.cpu().data.numpy())
 
             # compute loss

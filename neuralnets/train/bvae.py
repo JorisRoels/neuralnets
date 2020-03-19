@@ -112,15 +112,4 @@ print('[%s] Starting training' % (datetime.datetime.now()))
 net.train_net(train_loader, test_loader, loss_rec_fn, loss_kl_fn, optimizer, args.epochs, scheduler=scheduler,
               augmenter=augmenter, print_stats=args.print_stats, log_dir=args.log_dir)
 
-# """
-#     Validate the trained network
-# """
-# validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-#          write_dir=os.path.join(args.write_dir, 'segmentation_final'),
-#          val_file=os.path.join(args.log_dir, 'validation_final.npy'))
-# net = torch.load(os.path.join(args.log_dir, 'best_checkpoint.pytorch'))
-# validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-#          write_dir=os.path.join(args.write_dir, 'segmentation_best'),
-#          val_file=os.path.join(args.log_dir, 'validation_best.npy'))
-
 print('[%s] Finished!' % (datetime.datetime.now()))

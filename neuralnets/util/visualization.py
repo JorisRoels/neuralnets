@@ -6,6 +6,7 @@ from skimage.segmentation import mark_boundaries
 def overlay(x, y, colors=[(0, 1, 0)], alpha=0.2, boundaries=False):
     """
     Overlay an image with a segmentation map
+
     :param x: input (grayscale) image
     :param y: label map (all zeros are assumed background)
     :param colors: a list of 3-tuples specifying the colors that correspond to the different labels

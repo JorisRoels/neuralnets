@@ -13,8 +13,17 @@ from neuralnets.util.losses import boundary_weight_map
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 
 
-# original 2D unet encoder
 class UNetEncoder2D(nn.Module):
+    """
+    2D U-Net encoder
+
+    :param optional in_channels: number of input channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    :param optional dropout: dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    """
 
     def __init__(self, in_channels=1, feature_maps=64, levels=4, norm='instance', dropout=0.0, activation='relu'):
         super(UNetEncoder2D, self).__init__()
@@ -61,8 +70,18 @@ class UNetEncoder2D(nn.Module):
         return encoder_outputs, outputs
 
 
-# original 2D unet decoder
 class UNetDecoder2D(nn.Module):
+    """
+    2D U-Net decoder
+
+    :param optional out_channels: number of output channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional skip_connections: use skip connections or not
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    :param optional dropout: dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    """
 
     def __init__(self, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance', dropout=0.0,
                  activation='relu'):
@@ -117,8 +136,21 @@ class UNetDecoder2D(nn.Module):
         return decoder_outputs, outputs
 
 
-# original 2D unet model
 class UNet2D(nn.Module):
+    """
+    2D U-Net
+
+    :param optional in_channels: number of input channels
+    :param optional out_channels: number of output channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional skip_connections: use skip connections or not
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    :param optional dropout_enc: encoder dropout factor
+    :param optional dropout_dec: decoder dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    :param optional bnd_weight_map: use boundary weight maps in training
+    """
 
     def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance',
                  activation='relu', dropout_enc=0.0, dropout_dec=0.0, bnd_weight_map=False):
@@ -381,8 +413,17 @@ class UNet2D(nn.Module):
         writer.close()
 
 
-# original 3D unet encoder
 class UNetEncoder3D(nn.Module):
+    """
+    3D U-Net encoder
+
+    :param optional in_channels: number of input channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    :param optional dropout: dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    """
 
     def __init__(self, in_channels=1, feature_maps=64, levels=4, norm='instance', dropout=0.0, activation='relu'):
         super(UNetEncoder3D, self).__init__()
@@ -429,8 +470,18 @@ class UNetEncoder3D(nn.Module):
         return encoder_outputs, outputs
 
 
-# original 3D unet decoder
 class UNetDecoder3D(nn.Module):
+    """
+    3D U-Net decoder
+
+    :param optional out_channels: number of output channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional skip_connections: use skip connections or not
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    :param optional dropout: dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    """
 
     def __init__(self, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance', dropout=0.0,
                  activation='relu'):
@@ -485,8 +536,21 @@ class UNetDecoder3D(nn.Module):
         return decoder_outputs, outputs
 
 
-# original 3D unet model
 class UNet3D(nn.Module):
+    """
+    3D U-Net
+
+    :param optional in_channels: number of input channels
+    :param optional out_channels: number of output channels
+    :param optional feature_maps: number of initial feature maps
+    :param optional levels: levels of the encoder
+    :param optional skip_connections: use skip connections or not
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    :param optional dropout_enc: encoder dropout factor
+    :param optional dropout_dec: decoder dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    :param optional bnd_weight_map: use boundary weight maps in training
+    """
 
     def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance',
                  activation='relu', dropout_enc=0.0, dropout_dec=0.0, bnd_weight_map=False):

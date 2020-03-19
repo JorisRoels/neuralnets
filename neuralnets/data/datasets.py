@@ -8,6 +8,13 @@ from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input
 
 
 class StandardDataset(data.Dataset):
+    """
+    Standard dataset of N 2D images
+
+    :param data_path: path to the dataset
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    """
 
     def __init__(self, data_path, scaling=None, type='tif3d'):
         self.data_path = data_path
@@ -29,7 +36,7 @@ class StandardDataset(data.Dataset):
     def __len__(self):
         return self.data.shape[0]
 
-    def get_stats(self):
+    def _get_stats(self):
         mu = np.mean(self.data)
         std = np.std(self.data)
 
@@ -37,6 +44,14 @@ class StandardDataset(data.Dataset):
 
 
 class StronglyLabeledStandardDataset(StandardDataset):
+    """
+    Strongly labeled dataset of N 2D images and pixel-wise labels
+
+    :param data_path: path to the dataset
+    :param label_path: path to the labels
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    """
 
     def __init__(self, data_path, label_path, scaling=None, type='tif3d'):
         super().__init__(data_path, scaling=scaling, type=type)
@@ -53,7 +68,7 @@ class StronglyLabeledStandardDataset(StandardDataset):
                 F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                               mode='area')[0, 0, ...].numpy()
 
-        self.mu, self.std = self.get_stats()
+        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
@@ -72,11 +87,18 @@ class StronglyLabeledStandardDataset(StandardDataset):
 
 
 class UnlabeledStandardDataset(StandardDataset):
+    """
+    Unlabeled dataset of N 2D images
+
+    :param data_path: path to the dataset
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    """
 
     def __init__(self, data_path, scaling=None, type='tif3d'):
         super().__init__(data_path, scaling=scaling, type=type)
 
-        self.mu, self.std = self.get_stats()
+        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
@@ -91,6 +113,15 @@ class UnlabeledStandardDataset(StandardDataset):
 
 
 class VolumeDataset(data.Dataset):
+    """
+    Dataset for volumes
+
+    :param data_path: path to the dataset
+    :param input_shape: 3-tuple that specifies the input shape for sampling
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional len_epoch: number of iterations for one epoch
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    """
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d'):
         self.data_path = data_path
@@ -114,7 +145,7 @@ class VolumeDataset(data.Dataset):
     def __len__(self):
         return self.len_epoch
 
-    def get_stats(self):
+    def _get_stats(self):
         mu = np.mean(self.data)
         std = np.std(self.data)
 
@@ -122,6 +153,16 @@ class VolumeDataset(data.Dataset):
 
 
 class StronglyLabeledVolumeDataset(VolumeDataset):
+    """
+    Dataset for pixel-wise labeled volumes
+
+    :param data_path: path to the dataset
+    :param label_path: path to the labels
+    :param input_shape: 3-tuple that specifies the input shape for sampling
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional len_epoch: number of iterations for one epoch
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
@@ -138,7 +179,7 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
                 F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                               mode='area')[0, 0, ...].numpy()
 
-        self.mu, self.std = self.get_stats()
+        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
@@ -156,11 +197,20 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
 
 class UnlabeledVolumeDataset(VolumeDataset):
+    """
+    Dataset for unlabeled volumes
+
+    :param data_path: path to the dataset
+    :param input_shape: 3-tuple that specifies the input shape for sampling
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional len_epoch: number of iterations for one epoch
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
 
-        self.mu, self.std = self.get_stats()
+        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
@@ -175,6 +225,16 @@ class UnlabeledVolumeDataset(VolumeDataset):
 
 
 class MultiVolumeDataset(data.Dataset):
+    """
+    Dataset for multiple volumes
+
+    :param data_path: list of paths to the datasets
+    :param input_shape: 3-tuple that specifies the input shape for sampling
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional len_epoch: number of iterations for one epoch
+    :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
+    """
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform'):
         self.data_path = data_path
@@ -207,7 +267,7 @@ class MultiVolumeDataset(data.Dataset):
     def __len__(self):
         return self.len_epoch
 
-    def get_stats(self):
+    def _get_stats(self):
         mu = []
         std = []
 
@@ -219,6 +279,17 @@ class MultiVolumeDataset(data.Dataset):
 
 
 class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
+    """
+    Dataset for multiple pixel-wise labeled volumes
+
+    :param data_path: list of paths to the datasets
+    :param data_path: list of paths to the labels
+    :param input_shape: 3-tuple that specifies the input shape for sampling
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional len_epoch: number of iterations for one epoch
+    :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
+    """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
                  sampling_mode='uniform'):
@@ -241,7 +312,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
             self.labels.append(labels)
 
-        self.mu, self.std = self.get_stats()
+        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
@@ -265,13 +336,23 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
 
 class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
+    """
+    Dataset for multiple unlabeled volumes
+
+    :param data_path: list of paths to the datasets
+    :param input_shape: 3-tuple that specifies the input shape for sampling
+    :param optional scaling: tuple used for rescaling the data, or None
+    :param optional len_epoch: number of iterations for one epoch
+    :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
+    """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d',
                  sampling_mode='uniform'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
                          sampling_mode=sampling_mode)
 
-        self.mu, self.std = self.get_stats()
+        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
