@@ -320,7 +320,7 @@ class UNet2D(nn.Module):
 
             # always log scalars
             log_scalars([loss_avg, j, a, ba, p, r, f], ['test/' + s for s in
-                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced_accuracy',
+                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced-accuracy',
                                                          'precision', 'recall', 'f-score']], writer, epoch=epoch)
 
             # log images if necessary
@@ -692,7 +692,7 @@ class UNet3D(nn.Module):
 
             # always log scalars
             log_scalars([loss_avg, j, a, ba, p, r, f], ['test/' + s for s in
-                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced_accuracy',
+                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced-accuracy',
                                                          'precision', 'recall', 'f-score']], writer, epoch=epoch)
 
             # log images if necessary
