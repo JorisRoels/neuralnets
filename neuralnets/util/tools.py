@@ -155,14 +155,39 @@ def tensor_to_device(x, device):
     """
     Transfers a pytorch tensor to a specific GPU device
 
-    :param x: tensor that should be transferred
+    :param x: tensor or sequence/list of tensors that should be transferred
     :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
     :return x: same tensor, but switched to device
     """
-    if not torch.cuda.is_available():
-        return x.cpu()
+    if isinstance(x, tuple) or isinstance(x, list):
+        if not torch.cuda.is_available():
+            return [xx.cpu() for xx in x]
+        else:
+            return [xx.cuda(device=torch.device('cuda:' + str(device))) for xx in x]
     else:
-        return x.cuda(device=torch.device('cuda:' + str(device)))
+        if not torch.cuda.is_available():
+            return x.cpu()
+        else:
+            return x.cuda(device=torch.device('cuda:' + str(device)))
+
+
+def augment_samples(data, augmenter=None):
+    """
+    Augment a tensor with a specific augmenter
+
+    :param data: tensor or sequence/list of tensors that should be augmented
+    :param optional augmenter: augmenter that should be used (original data is returned if this is not specified)
+    :return data: augmented tensor (or list of tensors)
+    """
+    if augmenter is not None:
+        if isinstance(data, tuple) or isinstance(data, list):
+            bs = [x.size(0) for x in data]
+            data = [x.float() for x in data]
+            data_aug = augmenter(torch.cat(data, dim=0)).float()
+            return torch.split(data_aug, bs, dim=0)
+        else:
+            return augmenter(data.float()).float()
+    return data
 
 
 def log_scalars(scalars, names, writer, epoch=0):
@@ -205,6 +230,6 @@ def log_images_3d(images, names, writer, epoch=0, scale_each=True):
     :param optional scale_each: scale each image or not
     """
     for id, x in zip(names, images):
-        x = x[:, :, x.size(2)//2, :, :]
+        x = x[:, :, x.size(2) // 2, :, :]
         x = vutils.make_grid(x, normalize=x.max() - x.min() > 0, scale_each=scale_each)
         writer.add_image(id, x, epoch)

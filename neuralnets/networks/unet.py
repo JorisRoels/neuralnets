@@ -10,7 +10,8 @@ from torch.utils.tensorboard import SummaryWriter
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
 from neuralnets.util.losses import boundary_weight_map
 from neuralnets.util.metrics import jaccard, accuracy_metrics
-from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d
+from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d, \
+    augment_samples
 
 
 class UNetEncoder2D(nn.Module):
@@ -210,15 +211,11 @@ class UNet2D(nn.Module):
         for i, data in enumerate(loader):
 
             # transfer to suitable device
-            data[0] = tensor_to_device(data[0].float(), device)
-            data[1] = tensor_to_device(data[1].long(), device)
+            data = tensor_to_device(data, device)
 
             # get the inputs and augment if necessary
-            if augmenter is not None:
-                bs = data[0].size(0)
-                xy = augmenter(torch.cat((data[0], data[1].float()), dim=0))
-                x = xy[:bs, ...]
-                y = xy[bs:, ...].long()
+            x, y = augment_samples(data, augmenter=augmenter)
+            y = y.long()
 
             # zero the gradient buffers
             self.zero_grad()
@@ -288,8 +285,9 @@ class UNet2D(nn.Module):
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
-            x = tensor_to_device(data[0].float(), device)
-            y = tensor_to_device(data[1].long(), device)
+            x, y = tensor_to_device(data, device)
+            x = x.float()
+            y = y.long()
 
             # forward prop
             y_pred = self(x)
@@ -585,15 +583,12 @@ class UNet3D(nn.Module):
         for i, data in enumerate(loader):
 
             # transfer to suitable device
-            data[0] = tensor_to_device(data[0].float(), device)
-            data[1] = tensor_to_device(data[1].long(), device)
+            data = tensor_to_device(data, device)
 
             # get the inputs and augment if necessary
             if augmenter is not None:
-                bs = data[0].size(0)
-                xy = augmenter(torch.cat((data[0], data[1].float()), dim=0))
-                x = xy[:bs, ...]
-                y = xy[bs:, ...].long()
+                x, y = augment_samples(data, augmenter=augmenter)
+                y = y.long()
 
             # zero the gradient buffers
             self.zero_grad()
