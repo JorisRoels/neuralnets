@@ -28,6 +28,7 @@ parser = argparse.ArgumentParser()
 
 # logging parameters
 parser.add_argument("--seed", help="Seed for randomization", type=int, default=0)
+parser.add_argument("--device", help="GPU device for computations", type=int, default=0)
 parser.add_argument("--log_dir", help="Logging directory", type=str, default="unet_2d")
 parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses",
                     type=int, default=50)
@@ -76,21 +77,17 @@ if not os.path.exists(args.log_dir):
 """
 input_shape = (1, args.input_size[0], args.input_size[1])
 print('[%s] Loading data' % (datetime.datetime.now()))
-cuda = torch.cuda.is_available()
-augmenter = Compose([ToFloatTensor(cuda=cuda), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5),
+augmenter = Compose([ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5),
                      ContrastAdjust(adj=0.1, include_segmentation=True),
-                     RandomDeformation_2D(input_shape[1:], grid_size=(64, 64), sigma=0.01, cuda=cuda, include_segmentation=True),
+                     RandomDeformation_2D(input_shape[1:], grid_size=(64, 64), sigma=0.01, device=args.device,
+                                          include_segmentation=True),
                      AddNoise(sigma_max=0.05, include_segmentation=True)])
-train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/training.tif'),
-                                     os.path.join(args.data_dir, 'EM/EPFL/training_groundtruth.tif'),
-                                     input_shape=input_shape, len_epoch=args.len_epoch)
-test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/testing.tif'),
-                                    os.path.join(args.data_dir, 'EM/EPFL/testing_groundtruth.tif'),
-                                    input_shape=input_shape, len_epoch=args.len_epoch)
-train.data = train.data / 255
-test.data = test.data / 255
-train.labels = train.labels / 255
-test.labels = test.labels / 255
+train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/train'),
+                                     os.path.join(args.data_dir, 'EM/EPFL/train_labels'),
+                                     input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq')
+test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/test'),
+                                    os.path.join(args.data_dir, 'EM/EPFL/test_labels'),
+                                    input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq')
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.train_batch_size)
 
@@ -113,17 +110,17 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma
 """
 print('[%s] Starting training' % (datetime.datetime.now()))
 net.train_net(train_loader, test_loader, loss_fn, optimizer, args.epochs, scheduler=scheduler,
-              augmenter=augmenter, print_stats=args.print_stats, log_dir=args.log_dir, cuda=cuda)
+              augmenter=augmenter, print_stats=args.print_stats, log_dir=args.log_dir, device=args.device)
 
 """
     Validate the trained network
 """
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-         write_dir=os.path.join(args.write_dir, 'segmentation_final'),
+         write_dir=os.path.join(args.log_dir, 'segmentation_final'),
          val_file=os.path.join(args.log_dir, 'validation_final.npy'))
 net = torch.load(os.path.join(args.log_dir, 'best_checkpoint.pytorch'))
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-         write_dir=os.path.join(args.write_dir, 'segmentation_best'),
+         write_dir=os.path.join(args.log_dir, 'segmentation_best'),
          val_file=os.path.join(args.log_dir, 'validation_best.npy'))
 
 print('[%s] Finished!' % (datetime.datetime.now()))

@@ -5,69 +5,61 @@ import torch
 import torch.nn.functional as F
 from scipy.ndimage import spline_filter1d, zoom
 
+from neuralnets.util.tools import tensor_to_device
+
 
 class ToTensor(object):
     """
     Transforms a numpy array into a tensor
 
-    :param initalization cuda: specifies whether the tensor should be transfered to the GPU or not
+    :param initialization device: GPU device where the computations should occur
     :param forward x: input array (N_1, N_2, N_3, ...)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, cuda=True):
-        self.cuda = cuda
+    def __init__(self, device=0):
+        self.device = device
 
     def __call__(self, x):
-        if self.cuda:
-            return torch.Tensor(x).cuda()
-        else:
-            return torch.Tensor(x)
+        return tensor_to_device(torch.Tensor(x), device=self.device)
 
 
 class ToFloatTensor(object):
     """
     Transforms a Tensor to a FloatTensor
 
-    :param initialization cuda: specifies whether the tensor should be transfered to the GPU or not
+    :param initialization device: GPU device where the computations should occur
     :param forward x: input array (N_1, N_2, N_3, ...)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, cuda=True):
-        self.cuda = cuda
+    def __init__(self, device=0):
+        self.device = device
 
     def __call__(self, x):
-        if self.cuda:
-            return x.float().cuda()
-        else:
-            return x.float()
+        return tensor_to_device(x.float(), device=self.device)
 
 
 class ToLongTensor(object):
     """
     Transforms a Tensor to a LongTensor
 
-    :param initialization cuda: specifies whether the tensor should be transfered to the GPU or not
+    :param initialization device: GPU device where the computations should occur
     :param forward x: input array (N_1, N_2, N_3, ...)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, cuda=True):
-        self.cuda = cuda
+    def __init__(self, device=0):
+        self.device = device
 
     def __call__(self, x):
-        if self.cuda:
-            return x.long().cuda()
-        else:
-            return x.long()
+        return tensor_to_device(x.long(), device=self.device)
 
 
 class AddChannelAxis(object):
     """
     Add a channel to the input tensor
 
-    :param initialization cuda: specifies whether the tensor should be transfered to the GPU or not
     :param forward x: input tensor (N_1, N_2, N_3, ...)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
@@ -149,24 +141,21 @@ class ContrastAdjust(object):
     def __call__(self, x):
 
         if rnd.rand() < self.prob:
+            x_ = x
             if self.include_segmentation:
-                m = x[:x.size(0) // 2, ...].min()
-                M = x[:x.size(0) // 2, ...].max()
-                m_ = 2 * self.adj * torch.rand(1) - self.adj + m
-                M_ = 2 * self.adj * torch.rand(1) - self.adj + M
-                if x.is_cuda:
-                    m_ = m_.cuda()
-                    M_ = M_.cuda()
-                x_adj = ((x[:x.size(0) // 2, ...] - m) / (M - m)) * (M_ - m_) + m_
+                x_ = x[:x.size(0) // 2, ...]
+
+            m = x_.min()
+            M = x_.max()
+            m_ = 2 * self.adj * torch.rand(1) - self.adj + m
+            M_ = 2 * self.adj * torch.rand(1) - self.adj + M
+            m_ = m_.cuda(device=x.device)
+            M_ = M_.cuda(device=x.device)
+            x_adj = ((x[:x.size(0) // 2, ...] - m) / (M - m)) * (M_ - m_) + m_
+
+            if self.include_segmentation:
                 return torch.cat((x_adj, x[x.size(0) // 2:, ...]), dim=0)
             else:
-                m = x.min().cpu().numpy()
-                M = x.max().cpu().numpy()
-                m_ = 2 * self.adj * torch.rand() - self.adj + m
-                M_ = 2 * self.adj * torch.rand() - self.adj + M
-                if x.is_cuda:
-                    m_ = m_.cuda()
-                    M_ = M_.cuda()
                 return ((x - m) / (M - m)) * (M_ - m_) + m_
         else:
             return x
@@ -284,14 +273,14 @@ class RotateRandom_2D(object):
 
     :param initialization shape: 2D shape of the input image
     :param initialization rng: random degree interval size (symmetric around 0)
-    :param initialization cuda: specify whether the inputs are on the GPU.
+    :param initialization device: GPU device where the computations should occur
     :param forward x: input tensor (B, C, Y , X)
     :return: output tensor (B, C, Y , X)
     """
 
-    def __init__(self, shape, prob=1.0, rng=200, cuda=True):
+    def __init__(self, shape, prob=1.0, rng=200, device=0):
         self.shape = tuple(shape)
-        self.cuda = cuda
+        self.device = device
         self.rng = int(rng / 2)
         self.prob = prob
         self.image_center = int(self.shape[0] / 2), int(self.shape[1] / 2)
@@ -307,9 +296,7 @@ class RotateRandom_2D(object):
         yv = cv2.warpAffine(self.yv, rot_matrix, self.yv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
 
         grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if self.cuda:
-            grid = grid.cuda()
+        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
         return grid
 
     def __call__(self, x):
@@ -328,14 +315,14 @@ class RotateRandom_3D(object):
 
     :param initialization shape: 3D shape of the input image
     :param initialization rng: random degree interval size (symmetric around 0)
-    :param initialization cuda: specify whether the inputs are on the GPU.
+    :param initialization device: GPU device where the computations should occur
     :param forward x: input tensor (B, C, Z, Y , X)
     :return: output tensor (B, C, Z, Y , X)
     """
 
-    def __init__(self, shape, prob=1.0, rng=200, cuda=True):
+    def __init__(self, shape, prob=1.0, rng=200, device=0):
         self.shape = tuple(shape)
-        self.cuda = cuda
+        self.device = device
         self.rng = int(rng / 2)
         self.prob = prob
         self.image_center = int(self.shape[0] / 2), int(self.shape[1] / 2), int(self.shape[2] / 2)
@@ -354,9 +341,7 @@ class RotateRandom_3D(object):
 
         grid = torch.cat(
             (torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1), torch.Tensor(zv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if self.cuda:
-            grid = grid.cuda()
+        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
         return grid
 
     def __call__(self, x):
@@ -412,7 +397,7 @@ class RandomDeformation_2D(object):
 
     :param initialization shape: shape of the inputs
     :param initialization prob: probability of deforming the data
-    :param initialization cuda: specifies whether the inputs are on the GPU
+    :param initialization device: GPU device where the computations should occur
     :param initialization points: seed points for deformation
     :param initialization grid_size: tuple with number of pixels between each grid point
     :param initialization n_grids: number of grids to load in advance (chose more for higher variance in the data)
@@ -421,11 +406,11 @@ class RandomDeformation_2D(object):
     :return: output tensor (B, C, Y, X)
     """
 
-    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
+    def __init__(self, shape, prob=1, device=0, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
                  include_segmentation=False):
         self.shape = shape
         self.prob = prob
-        self.cuda = cuda
+        self.device = device
         self.grid_size = grid_size
         if points == None:
             points = [shape[0] // self.grid_size[0], shape[1] // self.grid_size[1]]
@@ -440,9 +425,7 @@ class RandomDeformation_2D(object):
         xv, yv = np.meshgrid(i, j)
 
         grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if cuda:
-            grid = grid.cuda()
+        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
         self.grid = grid
 
         # generate several random grids in advance (less CPU work)
@@ -464,9 +447,7 @@ class RandomDeformation_2D(object):
         for d in range(0, displacement.ndim - 1):
             displacement_f[:, :, d] = zoom(displacement[:, :, d], self.grid_size)
 
-        displacement = torch.Tensor(displacement_f).unsqueeze(0)
-        if self.cuda:
-            displacement = displacement.cuda()
+        displacement = tensor_to_device(torch.Tensor(displacement_f).unsqueeze(0), device=self.device)
         grid = self.grid + displacement
 
         return grid
@@ -490,7 +471,7 @@ class RandomDeformation_3D(object):
 
     :param initialization shape: shape of the inputs
     :param initialization prob: probability of deforming the data
-    :param initialization cuda: specifies whether the inputs are on the GPU
+    :param initialization device: GPU device where the computations should occur
     :param initialization points: seed points for deformation
     :param initialization grid_size: tuple with number of pixels between each grid point
     :param initialization n_grids: number of grids to load in advance (chose more for higher variance in the data)
@@ -499,11 +480,11 @@ class RandomDeformation_3D(object):
     :return: output tensor (B, C, Z, Y, X)
     """
 
-    def __init__(self, shape, prob=1, cuda=True, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
+    def __init__(self, shape, prob=1, device=0, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
                  include_segmentation=False):
         self.shape = shape
         self.prob = prob
-        self.cuda = cuda
+        self.device = device
         self.grid_size = grid_size
         if points == None:
             points = [shape[0] // self.grid_size[0], shape[1] // self.grid_size[1]]
@@ -518,9 +499,7 @@ class RandomDeformation_3D(object):
         xv, yv = np.meshgrid(i, j)
 
         grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = grid.unsqueeze(0)
-        if cuda:
-            grid = grid.cuda()
+        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
         self.grid = grid
 
         # generate several random grids in advance (less CPU work)
@@ -542,9 +521,7 @@ class RandomDeformation_3D(object):
         for d in range(0, displacement.ndim - 1):
             displacement_f[:, :, d] = zoom(displacement[:, :, d], self.grid_size)
 
-        displacement = torch.Tensor(displacement_f).unsqueeze(0)
-        if self.cuda:
-            displacement = displacement.cuda()
+        displacement = tensor_to_device(torch.Tensor(displacement_f).unsqueeze(0), device=self.device)
         grid = self.grid + displacement
 
         return grid

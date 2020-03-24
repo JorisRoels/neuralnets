@@ -30,6 +30,9 @@ class StandardDataset(data.Dataset):
                 F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                               mode='area')[0, 0, ...].numpy()
 
+        # data is rescaled to [0,1]
+        self.data = self.data / 255
+
     def __getitem__(self, i):
         pass
 
@@ -138,6 +141,9 @@ class VolumeDataset(data.Dataset):
             self.data = \
                 F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                               mode='area')[0, 0, ...].numpy()
+
+        # data is rescaled to [0,1]
+        self.data = self.data / 255
 
     def __getitem__(self, i):
         pass
@@ -255,6 +261,9 @@ class MultiVolumeDataset(data.Dataset):
                 data = \
                     F.interpolate(torch.Tensor(data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                                   mode='area')[0, 0, ...].numpy()
+
+            # data is rescaled to [0,1]
+            data /= 255
 
             self.data.append(data)
             self.data_sizes.append(data.size)

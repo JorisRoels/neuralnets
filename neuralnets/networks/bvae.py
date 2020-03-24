@@ -4,12 +4,11 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torchvision.utils as vutils
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D
+from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d
 
 
 def _reparametrise(mu, logvar):
@@ -33,7 +32,7 @@ class Encoder(nn.Module):
     :param optional norm: specify normalization ("batch", "instance" or None)
     """
 
-    def __init__(self, input_size=512, bottleneck_dim=2, in_channels=1, feature_maps=64, levels=5, norm='instance',
+    def __init__(self, input_size, bottleneck_dim=2, in_channels=1, feature_maps=64, levels=5, norm='instance',
                  dropout=0.0, activation='relu'):
         super(Encoder, self).__init__()
 
@@ -63,9 +62,9 @@ class Encoder(nn.Module):
             in_features = out_features
 
         # bottleneck
-        self.bottleneck = nn.Sequential(
-            nn.Linear(in_features=feature_maps // (2 ** (levels - 1)) * (input_size // 2 ** (levels - 1)) ** 2,
-                      out_features=bottleneck_dim * 2))
+        self.bottleneck = nn.Sequential(nn.Linear(
+            in_features=feature_maps // (2 ** (levels - 1)) * (input_size[0] // 2 ** levels) * (
+                    input_size[1] // 2 ** levels), out_features=bottleneck_dim * 2))
 
     def forward(self, inputs):
 
@@ -113,7 +112,8 @@ class Decoder(nn.Module):
         # bottleneck
         self.bottleneck = nn.Sequential(nn.Linear(in_features=bottleneck_dim,
                                                   out_features=feature_maps // (2 ** (levels - 1)) * (
-                                                          input_size // 2 ** (levels - 1)) ** 2))
+                                                          input_size[0] // 2 ** levels) * (
+                                                                       input_size[1] // 2 ** levels)))
 
         for i in range(levels - 1):
             # upsampling block
@@ -141,8 +141,8 @@ class Decoder(nn.Module):
         encoder_outputs.reverse()
 
         fm = self.feature_maps // (2 ** (self.levels - 1))
-        res = self.input_size // (2 ** (self.levels - 1))
-        inputs = self.bottleneck(inputs).view(inputs.size(0), fm, res, res)
+        inputs = self.bottleneck(inputs).view(inputs.size(0), fm, self.input_size[0] // (2 ** self.levels),
+                                              self.input_size[1] // (2 ** self.levels))
 
         outputs = inputs
         for i in range(self.levels):
@@ -172,7 +172,7 @@ class BVAE(nn.Module):
     :param optional norm: specify normalization ("batch", "instance" or None)
     """
 
-    def __init__(self, beta=1, input_size=512, bottleneck_dim=2, in_channels=1, out_channels=2, feature_maps=64,
+    def __init__(self, beta=0, input_size=512, bottleneck_dim=2, in_channels=1, out_channels=1, feature_maps=64,
                  levels=5, norm='instance', activation='relu', dropout_enc=0.0, dropout_dec=0.0):
         super(BVAE, self).__init__()
 
@@ -184,6 +184,11 @@ class BVAE(nn.Module):
         self.feature_maps = feature_maps
         self.levels = levels
         self.norm = norm
+        self.encoder_outputs = None
+        self.decoder_outputs = None
+        self.mu = None
+        self.logvar = None
+        self.z = None
 
         # contractive path
         self.encoder = Encoder(input_size=input_size, bottleneck_dim=bottleneck_dim, in_channels=in_channels,
@@ -197,21 +202,21 @@ class BVAE(nn.Module):
     def forward(self, inputs):
 
         # contractive path
-        encoder_outputs, bottleneck = self.encoder(inputs)
+        self.encoder_outputs, bottleneck = self.encoder(inputs)
 
-        mu = bottleneck[:, :self.bottleneck_dim]
-        logvar = bottleneck[:, self.bottleneck_dim:]
+        self.mu = bottleneck[:, :self.bottleneck_dim]
+        self.logvar = bottleneck[:, self.bottleneck_dim:]
 
         # reparameterization
-        z = _reparametrise(mu, logvar)
+        self.z = _reparametrise(self.mu, self.logvar)
 
         # expansive path
-        decoder_outputs, outputs = self.decoder(z, encoder_outputs)
+        self.decoder_outputs, outputs = self.decoder(self.z, self.encoder_outputs)
 
-        return outputs, mu, logvar
+        return outputs
 
     def train_epoch(self, loader, loss_rec_fn, loss_kl_fn, optimizer, epoch, augmenter=None, print_stats=1, writer=None,
-                    write_images=False):
+                    write_images=False, device=0):
         """
         Trains the network for one epoch
         :param loader: dataloader
@@ -223,13 +228,11 @@ class BVAE(nn.Module):
         :param print_stats: frequency of printing statistics
         :param writer: summary writer
         :param write_images: frequency of writing images
+        :param device: GPU device where the computations should occur
         :return: average training loss over the epoch
         """
         # make sure network is on the gpu and in training mode
-        if torch.cuda.is_available():
-            self.cuda()
-        else:
-            self.cpu()
+        module_to_device(self, device)
         self.train()
 
         # keep track of the average losses during the epoch
@@ -242,27 +245,21 @@ class BVAE(nn.Module):
         for i, data in enumerate(loader):
 
             # transfer to suitable device
-            k = 1
-            if torch.cuda.is_available():
-                data[k] = data[k].cuda().float()
-            else:
-                data[k] = data[k].cpu().float()
+            x = tensor_to_device(data.float(), device)
 
             # get the inputs and augment if necessary
             if augmenter is not None:
-                x = augmenter(data[k])
-            else:
-                x = data[k]
+                x = augmenter(x)
 
             # zero the gradient buffers
             self.zero_grad()
 
             # forward prop
-            x_pred, mu, logvar = self(x)
+            x_pred = torch.sigmoid(self(x))
 
             # compute loss
-            loss_rec = loss_rec_fn(x_pred, x.long())
-            loss_kl = loss_kl_fn(mu, logvar)
+            loss_rec = loss_rec_fn(x_pred, x)
+            loss_kl = loss_kl_fn(self.mu, self.logvar)
             loss = loss_rec + self.beta * loss_kl
             loss_rec_cum += loss_rec.data.cpu().numpy()
             loss_kl_cum += loss_kl.data.cpu().numpy()
@@ -286,27 +283,23 @@ class BVAE(nn.Module):
         loss_kl_avg = loss_kl_cum / cnt
         loss_avg = loss_cum / cnt
         print(
-            '[%s] Epoch %5d - Average train loss rec: %.6f - Average train loss rec: %.6f - Average train loss KL: %.6f'
+            '[%s] Epoch %5d - Average train loss rec: %.6f - Average train loss KL: %.6f - Average train loss: %.6f'
             % (datetime.datetime.now(), epoch, loss_rec_avg, loss_kl_avg, loss_avg))
 
         # log everything
         if writer is not None:
 
             # always log scalars
-            writer.add_scalar('train/loss-rec', loss_rec_avg, epoch)
-            writer.add_scalar('train/loss-kl', loss_kl_avg, epoch)
-            writer.add_scalar('train/loss', loss_avg, epoch)
+            log_scalars([loss_rec_avg, loss_kl_avg, loss_avg], ['train/' + s for s in ['loss-rec', 'loss-kl', 'loss']],
+                        writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
-                x_ = vutils.make_grid(x, normalize=True, scale_each=True)
-                x_pred = vutils.make_grid(F.softmax(x_pred.data, dim=1)[:, 1:2, :, :], normalize=x_pred.max() - x_pred.min() > 0, scale_each=True)
-                writer.add_image('train/x', x_, epoch)
-                writer.add_image('train/x_pred', x_pred, epoch)
+                log_images_2d([x, x_pred], ['train/' + s for s in ['x', 's_pred']], writer, epoch=epoch)
 
         return loss_avg
 
-    def test_epoch(self, loader, loss_rec_fn, loss_kl_fn, epoch, writer=None, write_images=False):
+    def test_epoch(self, loader, loss_rec_fn, loss_kl_fn, epoch, writer=None, write_images=False, device=0):
         """
         Tests the network for one epoch
         :param loader: dataloader
@@ -315,14 +308,12 @@ class BVAE(nn.Module):
         :param epoch: current epoch
         :param writer: summary writer
         :param write_images: frequency of writing images
+        :param device: GPU device where the computations should occur
         :return: average testing loss over the epoch
         """
         # make sure network is on the gpu and in training mode
-        if torch.cuda.is_available():
-            self.cuda()
-        else:
-            self.cpu()
-        self.train()
+        module_to_device(self, device)
+        self.eval()
 
         # keep track of the average losses during the epoch
         loss_rec_cum = 0.0
@@ -334,23 +325,17 @@ class BVAE(nn.Module):
         z = []
         li = []
         for i, data in enumerate(loader):
-
             # transfer to suitable device
-            k = 1
-            if torch.cuda.is_available():
-                data[k] = data[k].cuda().float()
-            else:
-                data[k] = data[k].cpu().float()
-            x = data[k][:, :, :256, :256]
+            x = tensor_to_device(data.float(), device)
 
             # forward prop
-            x_pred, mu, logvar = self(x)
-            z.append(_reparametrise(mu, logvar).cpu().data.numpy())
+            x_pred = torch.sigmoid(self(x))
+            z.append(_reparametrise(self.mu, self.logvar).cpu().data.numpy())
             li.append(x.cpu().data.numpy())
 
             # compute loss
-            loss_rec = loss_rec_fn(x_pred, x.long())
-            loss_kl = loss_kl_fn(mu, logvar)
+            loss_rec = loss_rec_fn(x_pred, x)
+            loss_kl = loss_kl_fn(self.mu, self.logvar)
             loss = loss_rec + self.beta * loss_kl
             loss_rec_cum += loss_rec.data.cpu().numpy()
             loss_kl_cum += loss_kl.data.cpu().numpy()
@@ -362,32 +347,24 @@ class BVAE(nn.Module):
         loss_kl_avg = loss_kl_cum / cnt
         loss_avg = loss_cum / cnt
         print(
-            '[%s] Epoch %5d - Average test loss rec: %.6f - Average test loss rec: %.6f - Average test loss KL: %.6f'
+            '[%s] Epoch %5d - Average test loss rec: %.6f - Average test loss KL: %.6f - Average test loss: %.6f'
             % (datetime.datetime.now(), epoch, loss_rec_avg, loss_kl_avg, loss_avg))
 
         # log everything
         if writer is not None:
 
             # always log scalars
-            writer.add_scalar('test/loss-rec', loss_rec_avg, epoch)
-            writer.add_scalar('test/loss-kl', loss_kl_avg, epoch)
-            writer.add_scalar('test/loss', loss_avg, epoch)
+            log_scalars([loss_rec_avg, loss_kl_avg, loss_avg], ['test/' + s for s in ['loss-rec', 'loss-kl', 'loss']],
+                        writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
-                x_ = vutils.make_grid(x, normalize=True, scale_each=True)
-                x_pred = vutils.make_grid(F.softmax(x_pred.data, dim=1)[:, 1:2, :, :], normalize=x_pred.max() - x_pred.min() > 0, scale_each=True)
-                z = np.concatenate(z[:100,...], axis=0)
-                li = torch.Tensor(np.concatenate(li[:100,...], axis=0))
-                writer.add_image('test/x', x_, epoch)
-                writer.add_image('test/x_pred', x_pred, epoch)
-                writer.add_embedding(z, global_step=epoch, label_img=li)
+                log_images_2d([x, x_pred], ['test/' + s for s in ['x', 's_pred']], writer, epoch=epoch)
 
         return loss_avg
 
     def train_net(self, train_loader, test_loader, loss_rec_fn, loss_kl_fn, optimizer, epochs, scheduler=None,
-                  test_freq=1,
-                  augmenter=None, print_stats=1, log_dir=None, write_images_freq=1):
+                  test_freq=1, augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, device=0):
         """
         Trains the network
         :param train_loader: data loader with training data
@@ -402,6 +379,7 @@ class BVAE(nn.Module):
         :param print_stats: frequency of logging statistics
         :param log_dir: logging directory
         :param write_images_freq: frequency of writing images
+        :param device: GPU device where the computations should occur
         """
         # log everything if necessary
         if log_dir is not None:
@@ -417,7 +395,7 @@ class BVAE(nn.Module):
             # train the model for one epoch
             self.train_epoch(loader=train_loader, loss_rec_fn=loss_rec_fn, loss_kl_fn=loss_kl_fn, optimizer=optimizer,
                              epoch=epoch, augmenter=augmenter, print_stats=print_stats, writer=writer,
-                             write_images=epoch % write_images_freq == 0)
+                             write_images=epoch % write_images_freq == 0, device=device)
 
             # adjust learning rate if necessary
             if scheduler is not None:
@@ -429,7 +407,7 @@ class BVAE(nn.Module):
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
                 test_loss = self.test_epoch(loader=test_loader, loss_rec_fn=loss_rec_fn, loss_kl_fn=loss_kl_fn,
-                                            epoch=epoch, writer=writer, write_images=True)
+                                            epoch=epoch, writer=writer, write_images=True, device=device)
 
                 # and save model if lower test loss is found
                 if test_loss < test_loss_min:

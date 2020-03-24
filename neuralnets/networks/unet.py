@@ -5,12 +5,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.utils as vutils
 from torch.utils.tensorboard import SummaryWriter
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
 from neuralnets.util.losses import boundary_weight_map
 from neuralnets.util.metrics import jaccard, accuracy_metrics
+from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d
 
 
 class UNetEncoder2D(nn.Module):
@@ -162,6 +162,8 @@ class UNet2D(nn.Module):
         self.levels = levels
         self.norm = norm
         self.bnd_weight_map = bnd_weight_map
+        self.encoder_outputs = None
+        self.decoder_outputs = None
 
         # contractive path
         self.encoder = UNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
@@ -174,15 +176,15 @@ class UNet2D(nn.Module):
     def forward(self, inputs):
 
         # contractive path
-        encoder_outputs, final_output = self.encoder(inputs)
+        self.encoder_outputs, final_output = self.encoder(inputs)
 
         # expansive path
-        decoder_outputs, outputs = self.decoder(final_output, encoder_outputs)
+        self.decoder_outputs, outputs = self.decoder(final_output, self.encoder_outputs)
 
         return outputs
 
     def train_epoch(self, loader, loss_fn, optimizer, epoch, augmenter=None, print_stats=1, writer=None,
-                    write_images=False, cuda=True):
+                    write_images=False, device=0):
         """
         Trains the network for one epoch
         :param loader: dataloader
@@ -193,14 +195,11 @@ class UNet2D(nn.Module):
         :param print_stats: frequency of printing statistics
         :param writer: summary writer
         :param write_images: frequency of writing images
-        :param cuda: perform training on GPU/CPU
+        :param device: GPU device where the computations should occur
         :return: average training loss over the epoch
         """
         # perform training on GPU/CPU
-        if cuda:
-            self.cuda()
-        else:
-            self.cpu()
+        module_to_device(self, device)
         self.train()
 
         # keep track of the average loss during the epoch
@@ -211,12 +210,8 @@ class UNet2D(nn.Module):
         for i, data in enumerate(loader):
 
             # transfer to suitable device
-            if cuda:
-                data[0] = data[0].cuda().float()
-                data[1] = data[1].cuda().long()
-            else:
-                data[0] = data[0].cpu().float()
-                data[1] = data[1].cpu().long()
+            data[0] = tensor_to_device(data[0].float(), device)
+            data[1] = tensor_to_device(data[1].long(), device)
 
             # get the inputs and augment if necessary
             if augmenter is not None:
@@ -253,28 +248,22 @@ class UNet2D(nn.Module):
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average train loss: %.6f'
-              % (datetime.datetime.now(), epoch, loss_avg))
+        print('[%s] Epoch %5d - Average train loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
 
         # log everything
         if writer is not None:
 
             # always log scalars
-            writer.add_scalar('train/loss-seg', loss_avg, epoch)
+            log_scalars([loss_avg], ['train/' + s for s in ['loss-seg']], writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
-                x = vutils.make_grid(x, normalize=True, scale_each=True)
-                y = vutils.make_grid(y, normalize=y.max() - y.min() > 0, scale_each=True)
-                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, :, :].data,
-                                          normalize=y_pred.max() - y_pred.min() > 0, scale_each=True)
-                writer.add_image('train/x', x, epoch)
-                writer.add_image('train/y', y, epoch)
-                writer.add_image('train/y_pred', y_pred, epoch)
+                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
+                log_images_2d([x, y, y_pred], ['train/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
 
         return loss_avg
 
-    def test_epoch(self, loader, loss_fn, epoch, writer=None, write_images=False, cuda=True):
+    def test_epoch(self, loader, loss_fn, epoch, writer=None, write_images=False, device=0):
         """
         Tests the network for one epoch
         :param loader: dataloader
@@ -282,14 +271,11 @@ class UNet2D(nn.Module):
         :param epoch: current epoch
         :param writer: summary writer
         :param write_images: frequency of writing images
-        :param cuda: perform training on GPU/CPU
+        :param device: GPU device where the computations should occur
         :return: average testing loss over the epoch
         """
         # perform training on GPU/CPU
-        if cuda:
-            self.cuda()
-        else:
-            self.cpu()
+        module_to_device(self, device)
         self.eval()
 
         # keep track of the average loss and metrics during the epoch
@@ -302,10 +288,8 @@ class UNet2D(nn.Module):
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
-            if cuda:
-                x, y = data[0].cuda().float(), data[1].cuda().long()
-            else:
-                x, y = data[0].cpu().float(), data[1].cpu().long()
+            x = tensor_to_device(data[0].float(), device)
+            y = tensor_to_device(data[1].long(), device)
 
             # forward prop
             y_pred = self(x)
@@ -337,28 +321,19 @@ class UNet2D(nn.Module):
         if writer is not None:
 
             # always log scalars
-            writer.add_scalar('test/loss-seg', loss_avg, epoch)
-            writer.add_scalar('test/jaccard', j, epoch)
-            writer.add_scalar('test/accuracy', a, epoch)
-            writer.add_scalar('test/balanced_accuracy', ba, epoch)
-            writer.add_scalar('test/precision', p, epoch)
-            writer.add_scalar('test/recall', r, epoch)
-            writer.add_scalar('test/f-score', f, epoch)
+            log_scalars([loss_avg, j, a, ba, p, r, f], ['test/' + s for s in
+                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced_accuracy',
+                                                         'precision', 'recall', 'f-score']], writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
-                x = vutils.make_grid(x, normalize=True, scale_each=True)
-                y = vutils.make_grid(y, normalize=y.max() - y.min() > 0, scale_each=True)
-                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, :, :].data,
-                                          normalize=y_pred.max() - y_pred.min() > 0, scale_each=True)
-                writer.add_image('test/x', x, epoch)
-                writer.add_image('test/y', y, epoch)
-                writer.add_image('test/y_pred', y_pred, epoch)
+                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
+                log_images_2d([x, y, y_pred], ['test/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
 
         return loss_avg
 
     def train_net(self, train_loader, test_loader, loss_fn, optimizer, epochs, scheduler=None, test_freq=1,
-                  augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, cuda=True):
+                  augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, device=0):
         """
         Trains the network
         :param train_loader: data loader with training data
@@ -372,7 +347,7 @@ class UNet2D(nn.Module):
         :param print_stats: frequency of logging statistics
         :param log_dir: logging directory
         :param write_images_freq: frequency of writing images
-        :param cuda: perform training on GPU/CPU
+        :param device: GPU device where the computations should occur
         """
         # log everything if necessary
         if log_dir is not None:
@@ -388,7 +363,7 @@ class UNet2D(nn.Module):
             # train the model for one epoch
             self.train_epoch(loader=train_loader, loss_fn=loss_fn, optimizer=optimizer, epoch=epoch,
                              augmenter=augmenter, print_stats=print_stats, writer=writer,
-                             write_images=epoch % write_images_freq == 0, cuda=cuda)
+                             write_images=epoch % write_images_freq == 0, device=device)
 
             # adjust learning rate if necessary
             if scheduler is not None:
@@ -400,7 +375,7 @@ class UNet2D(nn.Module):
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
                 test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
-                                            write_images=True, cuda=cuda)
+                                            write_images=True, device=device)
 
                 # and save model if lower test loss is found
                 if test_loss < test_loss_min:
@@ -562,6 +537,8 @@ class UNet3D(nn.Module):
         self.levels = levels
         self.norm = norm
         self.bnd_weight_map = bnd_weight_map
+        self.encoder_outputs = None
+        self.decoder_outputs = None
 
         # contractive path
         self.encoder = UNetEncoder3D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
@@ -574,15 +551,15 @@ class UNet3D(nn.Module):
     def forward(self, inputs):
 
         # contractive path
-        encoder_outputs, final_output = self.encoder(inputs)
+        self.encoder_outputs, final_output = self.encoder(inputs)
 
         # expansive path
-        decoder_outputs, outputs = self.decoder(final_output, encoder_outputs)
+        self.decoder_outputs, outputs = self.decoder(final_output, self.encoder_outputs)
 
         return outputs
 
     def train_epoch(self, loader, loss_fn, optimizer, epoch, augmenter=None, print_stats=1, writer=None,
-                    write_images=False, cuda=True):
+                    write_images=False, device=0):
         """
         Trains the network for one epoch
         :param loader: dataloader
@@ -593,14 +570,11 @@ class UNet3D(nn.Module):
         :param print_stats: frequency of printing statistics
         :param writer: summary writer
         :param write_images: frequency of writing images
-        :param cuda: perform training on GPU/CPU
+        :param device: GPU device where the computations should occur
         :return: average training loss over the epoch
         """
         # perform training on GPU/CPU
-        if cuda:
-            self.cuda()
-        else:
-            self.cpu()
+        module_to_device(self, device)
         self.train()
 
         # keep track of the average loss during the epoch
@@ -611,12 +585,8 @@ class UNet3D(nn.Module):
         for i, data in enumerate(loader):
 
             # transfer to suitable device
-            if cuda:
-                data[0] = data[0].cuda().float()
-                data[1] = data[1].cuda().long()
-            else:
-                data[0] = data[0].cpu().float()
-                data[1] = data[1].cpu().long()
+            data[0] = tensor_to_device(data[0].float(), device)
+            data[1] = tensor_to_device(data[1].long(), device)
 
             # get the inputs and augment if necessary
             if augmenter is not None:
@@ -660,22 +630,16 @@ class UNet3D(nn.Module):
         if writer is not None:
 
             # always log scalars
-            writer.add_scalar('train/loss-seg', loss_avg, epoch)
+            log_scalars([loss_avg], ['train/' + s for s in ['loss-seg']], writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
-                s = x.size(2) // 2
-                x = vutils.make_grid(x[:, :, s, :, :], normalize=True, scale_each=True)
-                y = vutils.make_grid(y[:, :, s, :, :], normalize=y.max() - y.min() > 0, scale_each=True)
-                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, s, :, :].data,
-                                          normalize=y_pred.max() - y_pred.min() > 0, scale_each=True)
-                writer.add_image('train/x', x, epoch)
-                writer.add_image('train/y', y, epoch)
-                writer.add_image('train/y_pred', y_pred, epoch)
+                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
+                log_images_3d([x, y, y_pred], ['train/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
 
         return loss_avg
 
-    def test_epoch(self, loader, loss_fn, epoch, writer=None, write_images=False, cuda=True):
+    def test_epoch(self, loader, loss_fn, epoch, writer=None, write_images=False, device=0):
         """
         Tests the network for one epoch
         :param loader: dataloader
@@ -683,14 +647,11 @@ class UNet3D(nn.Module):
         :param epoch: current epoch
         :param writer: summary writer
         :param write_images: frequency of writing images
-        :param cuda: perform training on GPU/CPU
+        :param device: GPU device where the computations should occur
         :return: average testing loss over the epoch
         """
         # perform training on GPU/CPU
-        if cuda:
-            self.cuda()
-        else:
-            self.cpu()
+        module_to_device(self, device)
         self.eval()
 
         # keep track of the average loss and metrics during the epoch
@@ -703,10 +664,8 @@ class UNet3D(nn.Module):
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
-            if cuda:
-                x, y = data[0].cuda().float(), data[1].cuda().long()
-            else:
-                x, y = data[0].cpu().float(), data[1].cpu().long()
+            x = tensor_to_device(data[0].float(), device)
+            y = tensor_to_device(data[1].long(), device)
 
             # forward prop
             y_pred = self(x)
@@ -731,36 +690,25 @@ class UNet3D(nn.Module):
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average test loss: %.6f'
-              % (datetime.datetime.now(), epoch, loss_avg))
+        print('[%s] Epoch %5d - Average test loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
 
         # log everything
         if writer is not None:
 
             # always log scalars
-            writer.add_scalar('test/loss-seg', loss_avg, epoch)
-            writer.add_scalar('test/jaccard', j, epoch)
-            writer.add_scalar('test/accuracy', a, epoch)
-            writer.add_scalar('test/balanced_accuracy', ba, epoch)
-            writer.add_scalar('test/precision', p, epoch)
-            writer.add_scalar('test/recall', r, epoch)
-            writer.add_scalar('test/f-score', f, epoch)
+            log_scalars([loss_avg, j, a, ba, p, r, f], ['test/' + s for s in
+                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced_accuracy',
+                                                         'precision', 'recall', 'f-score']], writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
-                s = x.size(2) // 2
-                x = vutils.make_grid(x[:, :, s, :, :], normalize=True, scale_each=True)
-                y = vutils.make_grid(y[:, :, s, :, :], normalize=y.max() - y.min() > 0, scale_each=True)
-                y_pred = vutils.make_grid(F.softmax(y_pred, dim=1)[:, 1:2, s, :, :].data,
-                                          normalize=y_pred.max() - y_pred.min() > 0, scale_each=True)
-                writer.add_image('test/x', x, epoch)
-                writer.add_image('test/y', y, epoch)
-                writer.add_image('test/y_pred', y_pred, epoch)
+                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
+                log_images_3d([x, y, y_pred], ['test/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
 
         return loss_avg
 
     def train_net(self, train_loader, test_loader, loss_fn, optimizer, epochs, scheduler=None, test_freq=1,
-                  augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, cuda=True):
+                  augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, device=0):
         """
         Trains the network
         :param train_loader: data loader with training data
@@ -774,7 +722,7 @@ class UNet3D(nn.Module):
         :param print_stats: frequency of logging statistics
         :param log_dir: logging directory
         :param write_images_freq: frequency of writing images
-        :param cuda: perform training on GPU/CPU
+        :param device: GPU device where the computations should occur
         """
         # log everything if necessary
         if log_dir is not None:
@@ -790,7 +738,7 @@ class UNet3D(nn.Module):
             # train the model for one epoch
             self.train_epoch(loader=train_loader, loss_fn=loss_fn, optimizer=optimizer, epoch=epoch,
                              augmenter=augmenter, print_stats=print_stats, writer=writer,
-                             write_images=epoch % write_images_freq == 0, cuda=cuda)
+                             write_images=epoch % write_images_freq == 0, device=device)
 
             # adjust learning rate if necessary
             if scheduler is not None:
@@ -802,7 +750,7 @@ class UNet3D(nn.Module):
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
                 test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
-                                            write_images=True, cuda=cuda)
+                                            write_images=True, device=device)
 
                 # and save model if lower test loss is found
                 if test_loss < test_loss_min:

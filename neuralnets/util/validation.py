@@ -8,7 +8,7 @@ from progress.bar import Bar
 
 from neuralnets.util.io import write_volume
 from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distance
-from neuralnets.util.tools import gaussian_window
+from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device
 
 
 def sliding_window_multichannel(image, step_size, window_size, track_progress=False):
@@ -53,7 +53,95 @@ def sliding_window_multichannel(image, step_size, window_size, track_progress=Fa
         bar.finish()
 
 
-def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False):
+def _init_step_size(step_size, input_shape, is2d):
+    if step_size == None:
+        if is2d:
+            step_size = (1, input_shape[0] // 2, input_shape[1] // 2)
+        else:
+            step_size = (input_shape[0] // 2, input_shape[1] // 2, input_shape[2] // 2)
+    return step_size
+
+
+def _init_gaussian_window(input_shape, is2d):
+    if is2d:
+        g_window = gaussian_window((1, input_shape[0], input_shape[1]), sigma=input_shape[-1] / 4)
+    else:
+        g_window = gaussian_window(input_shape, sigma=input_shape[-1] / 4)
+    return g_window
+
+
+def _init_sliding_window(data, step_size, input_shape, is2d, track_progress):
+    if is2d:
+        sw = sliding_window_multichannel(data, step_size=step_size, window_size=(1, input_shape[0], input_shape[1]),
+                                         track_progress=track_progress)
+    else:
+        sw = sliding_window_multichannel(data, step_size=step_size, window_size=input_shape,
+                                         track_progress=track_progress)
+    return sw
+
+
+def _init_batch(batch_size, channels, input_shape, is2d):
+    if is2d:
+        batch = np.zeros((batch_size, channels, input_shape[0], input_shape[1]))
+    else:
+        batch = np.zeros((batch_size, channels, input_shape[0], input_shape[1], input_shape[2]))
+    return batch
+
+
+def _pad(data, input_shape):
+    # pad data if input shape is larger than data
+    in_shape = input_shape if len(input_shape) == 3 else (1, input_shape[0], input_shape[1])
+    pad_width = [(0, 0), None, None, None]
+    for d in range(3):
+        padding = np.maximum(0, in_shape[d] - data.shape[d + 1])
+        before = padding // 2
+        after = padding - before
+        pad_width[d + 1] = (before, after)
+    return np.pad(data, pad_width=pad_width, mode='symmetric'), pad_width
+
+
+def _crop(data, seg_cum, counts_cum, pad_width):
+    return data[:, pad_width[0][0]:data.shape[1] - pad_width[0][1], pad_width[1][0]:data.shape[2] - pad_width[1][1],
+           pad_width[2][0]:data.shape[3] - pad_width[2][1]], \
+           seg_cum[pad_width[0][0]:data.shape[1] - pad_width[0][1], pad_width[1][0]:data.shape[2] - pad_width[1][1],
+           pad_width[2][0]:data.shape[3] - pad_width[2][1]], \
+           counts_cum[pad_width[0][0]:data.shape[1] - pad_width[0][1], pad_width[1][0]:data.shape[2] - pad_width[1][1],
+           pad_width[2][0]:data.shape[3] - pad_width[2][1]]
+
+
+def _forward_prop(net, x):
+    outputs = net(x)
+    # if the outputs are a tuple, take the last
+    if type(outputs) is tuple:
+        outputs = outputs[-1]
+    return F.softmax(outputs, dim=1)
+
+
+def _cumulate_segmentation(seg_cum, counts_cum, outputs, g_window, positions, batch_size, input_shape, is2d):
+    for b in range(batch_size):
+        (z_b, y_b, x_b) = positions[b, :]
+        # take into account the gaussian filtering
+        if is2d:
+            seg_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += \
+                np.multiply(g_window, outputs.data.cpu().numpy()[b, 1:2, :, :])
+            counts_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += g_window
+        else:
+            seg_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += \
+                np.multiply(g_window, outputs.data.cpu().numpy()[b, 1, ...])
+            counts_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += g_window
+
+
+def _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, input_shape, is2d):
+    # convert to tensors and switch to correct device
+    inputs = tensor_to_device(torch.FloatTensor(batch), device)
+    # forward prop
+    outputs = _forward_prop(net, inputs)
+    # cumulate segmentation volume
+    _cumulate_segmentation(seg_cum, counts_cum, outputs, g_window, positions, batch_size, input_shape, is2d)
+
+
+def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False,
+                         device=0):
     """
     Segment a multichannel 3D image using a specific network
 
@@ -64,55 +152,44 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
     :param step_size: step size of the sliding window
     :param train: evaluate the network in training mode
     :param track_progress: optionally, for tracking progress with progress bar
+    :param device: GPU device where the computations should occur
     :return: the segmented image
     """
 
-    # make sure we compute everything on the gpu and in the correct mode
-    if torch.cuda.is_available():
-        net.cuda()
-    else:
-        net.cpu()
+    # make sure we compute everything on the correct device
+    module_to_device(net, device)
+
+    # set the network in the correct mode
     if train:
         net.train()
     else:
         net.eval()
 
+    # get the amount of channels
     channels = data.shape[0]
+
+    # pad data if necessary
+    data, pad_width = _pad(data, input_shape)
 
     # 2D or 3D
     is2d = len(input_shape) == 2
 
-    # set step size to half of the window if necessary
-    if step_size == None:
-        if is2d:
-            step_size = (1, input_shape[0] // 2, input_shape[1] // 2)
-        else:
-            step_size = (input_shape[0] // 2, input_shape[1] // 2, input_shape[2] // 2)
+    # initialize the step size
+    step_size = _init_step_size(step_size, input_shape, is2d)
 
     # gaussian window for smooth block merging
-    if is2d:
-        g_window = gaussian_window((1, input_shape[0], input_shape[1]), sigma=input_shape[-1] / 4)
-    else:
-        g_window = gaussian_window(input_shape, sigma=input_shape[-1] / 4)
+    g_window = _init_gaussian_window(input_shape, is2d)
 
     # allocate space
     seg_cum = np.zeros(data.shape[1:])
     counts_cum = np.zeros(data.shape[1:])
 
     # define sliding window
-    if is2d:
-        sw = sliding_window_multichannel(data, step_size=step_size, window_size=(1, input_shape[0], input_shape[1]),
-                                         track_progress=track_progress)
-    else:
-        sw = sliding_window_multichannel(data, step_size=step_size, window_size=input_shape,
-                                         track_progress=track_progress)
+    sw = _init_sliding_window(data, step_size, input_shape, is2d, track_progress)
 
     # start prediction
     batch_counter = 0
-    if is2d:
-        batch = np.zeros((batch_size, channels, input_shape[0], input_shape[1]))
-    else:
-        batch = np.zeros((batch_size, channels, input_shape[0], input_shape[1], input_shape[2]))
+    batch = _init_batch(batch_size, channels, input_shape, is2d)
     positions = np.zeros((batch_size, 3), dtype=int)
     for (z, y, x, inputs) in sw:
 
@@ -125,68 +202,23 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
 
         # perform segmentation when a full batch is filled
         if batch_counter == batch_size:
-
-            # convert to tensors
-            if torch.cuda.is_available():
-                inputs = torch.FloatTensor(batch).cuda()
-            else:
-                inputs = torch.FloatTensor(batch).cpu()
-
-            # forward prop
-            outputs = net(inputs)
-            if type(outputs) is tuple:
-                outputs = outputs[-1]
-            outputs = F.softmax(outputs, dim=1)
-
-            # cumulate segmentation volume
-            for b in range(batch_size):
-                (z_b, y_b, x_b) = positions[b, :]
-                # take into account the gaussian filtering
-                if is2d:
-                    seg_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += \
-                        np.multiply(g_window, outputs.data.cpu().numpy()[b, 1:2, :, :])
-                    counts_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += g_window
-                else:
-                    seg_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += \
-                        np.multiply(g_window, outputs.data.cpu().numpy()[b, 1, ...])
-                    counts_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += g_window
+            # process a single batch
+            _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, input_shape, is2d)
 
             # reset batch counter
             batch_counter = 0
 
-    # don't forget last batch
-    # convert to tensors
-    if torch.cuda.is_available():
-        inputs = torch.FloatTensor(batch).cuda()
-    else:
-        inputs = torch.FloatTensor(batch).cpu()
-
-    # forward prop
-    outputs = net(inputs)
-    if type(outputs) is tuple:
-        outputs = outputs[-1]
-    outputs = F.softmax(outputs, dim=1)
-
-    # cumulate segmentation volume
-    for b in range(batch_counter):
-        (z_b, y_b, x_b) = positions[b, :]
-        # take into account the gaussian filtering
-        if is2d:
-            seg_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += \
-                np.multiply(g_window, outputs.data.cpu().numpy()[b, 1:2, :, :])
-            counts_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += g_window
-        else:
-            seg_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += \
-                np.multiply(g_window, outputs.data.cpu().numpy()[b, 1, ...])
-            counts_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += g_window
+    # don't forget to process the last batch
+    _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, input_shape, is2d)
 
     # crop out the symmetric extension and compute segmentation
+    data, seg_cum, counts_cum = _crop(data, seg_cum, counts_cum, pad_width)
     segmentation = np.divide(seg_cum, counts_cum)
 
     return segmentation
 
 
-def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False):
+def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False, device=0):
     """
     Segment a 3D image using a specific network
 
@@ -197,15 +229,16 @@ def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, t
     :param step_size: step size of the sliding window
     :param train: evaluate the network in training mode
     :param track_progress: optionally, for tracking progress with progress bar
+    :param device: GPU device where the computations should occur
     :return: the segmented image
     """
 
-    return segment_multichannel(data[np.newaxis, ...], net, input_shape,
-                                batch_size=batch_size, step_size=step_size, train=train, track_progress=track_progress)
+    return segment_multichannel(data[np.newaxis, ...], net, input_shape, batch_size=batch_size, step_size=step_size,
+                                train=train, track_progress=track_progress, device=device)
 
 
 def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, write_dir=None, val_file=None,
-             writer=None, epoch=0, track_progress=False):
+             writer=None, epoch=0, track_progress=False, device=0):
     """
     Validate a network on a dataset and its labels
 
@@ -220,6 +253,7 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
     :param writer: optionally, summary writer for logging to tensorboard
     :param epoch: optionally, current epoch for logging to tensorboard
     :param track_progress: optionally, for tracking progress with progress bar
+    :param device: GPU device where the computations should occur
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
@@ -228,26 +262,8 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
     if write_dir is not None and not os.path.exists(write_dir):
         os.mkdir(write_dir)
 
-    # extend boundaries if necessary
-    zo, yo, xo = data.shape
-    if len(input_size) == 3:
-        zp = int(np.ceil(max(0, input_size[0] - zo) / 2))
-        yp = int(np.ceil(max(0, input_size[1] - yo) / 2))
-        xp = int(np.ceil(max(0, input_size[2] - xo) / 2))
-    else:  # 2D case
-        zp = 0
-        yp = int(np.ceil(max(0, input_size[0] - yo) / 2))
-        xp = int(np.ceil(max(0, input_size[1] - xo) / 2))
-    data = np.pad(data, ((zp, zp), (yp, yp), (xp, xp)), mode='symmetric')
-    labels = np.pad(labels, ((zp, zp), (yp, yp), (xp, xp)), mode='symmetric')
-
     # compute segmentation
-    segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress)
-
-    # crop to original size
-    data = data[zp:zo - zp, yp:yo - yp, xp:xo - xp]
-    labels = labels[zp:zo - zp, yp:yo - yp, xp:xo - xp]
-    segmentation = segmentation[zp:zo - zp, yp:yo - yp, xp:xo - xp]
+    segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress, device=device)
 
     # compute metrics
     labels_interest = (labels == label_of_interest).astype('float')

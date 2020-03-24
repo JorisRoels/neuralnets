@@ -110,7 +110,7 @@ class L1Loss(nn.Module):
     L_1 loss function
 
     :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
-    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward pred: predictions tensor (N_1, N_2, ...)
     :param forward target: targets tensor (N_1, N_2, ...)
     :return: L_1 loss
     """
@@ -120,9 +120,8 @@ class L1Loss(nn.Module):
 
         self.size_average = size_average
 
-    def forward(self, input, target):
-        target_rec = torch.sigmoid(input)
-        loss = torch.sum(torch.abs(target - target_rec))
+    def forward(self, pred, target):
+        loss = torch.sum(torch.abs(target - pred))
         if self.size_average:
             loss = loss / target.numel()
         return loss
@@ -133,7 +132,7 @@ class MSELoss(nn.Module):
     Mean squared error (MSE) loss function
 
     :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
-    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward pred: predictions tensor (N_1, N_2, ...)
     :param forward target: targets tensor (N_1, N_2, ...)
     :return: MSE loss
     """
@@ -143,9 +142,8 @@ class MSELoss(nn.Module):
 
         self.size_average = size_average
 
-    def forward(self, input, target):
-        target_rec = torch.sigmoid(input)
-        loss = torch.sum(torch.pow(target - target_rec, 2))
+    def forward(self, pred, target):
+        loss = torch.sum(torch.pow(target - pred, 2))
         if self.size_average:
             loss = loss / target.numel()
         return loss
@@ -156,7 +154,7 @@ class MADLoss(nn.Module):
     Mean absolute deviation (MAD) loss function
 
     :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
-    :param forward logits: logits tensor (N_1, N_2, ...)
+    :param forward pred: predictions tensor (N_1, N_2, ...)
     :param forward target: targets tensor (N_1, N_2, ...)
     :return: MAD loss
     """
@@ -166,9 +164,8 @@ class MADLoss(nn.Module):
 
         self.size_average = size_average
 
-    def forward(self, input, target):
-        target_rec = torch.sigmoid(input)
-        loss = torch.sum(torch.abs(target - target_rec))
+    def forward(self, pred, target):
+        loss = torch.sum(torch.abs(target - pred))
         if self.size_average:
             loss = loss / target.numel()
         return loss

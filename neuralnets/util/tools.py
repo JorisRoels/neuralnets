@@ -3,6 +3,7 @@ import random
 
 import numpy as np
 import torch
+import torchvision.utils as vutils
 
 from neuralnets.util.io import read_volume
 
@@ -135,3 +136,75 @@ def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
     torch.manual_seed(seed)
+
+
+def module_to_device(module, device):
+    """
+    Transfers a pytorch module to a specific GPU device
+
+    :param module: module that should be transferred
+    :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
+    """
+    if not torch.cuda.is_available():
+        module.cpu()
+    else:
+        module.cuda(device=device)
+
+
+def tensor_to_device(x, device):
+    """
+    Transfers a pytorch tensor to a specific GPU device
+
+    :param x: tensor that should be transferred
+    :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
+    :return x: same tensor, but switched to device
+    """
+    if not torch.cuda.is_available():
+        return x.cpu()
+    else:
+        return x.cuda(device=torch.device('cuda:' + str(device)))
+
+
+def log_scalars(scalars, names, writer, epoch=0):
+    """
+    Writes a list of scalars to a tensorboard events file
+
+    :param scalars: list of scalars (can be tensors or numpy arrays) that should be logged
+    :param names: list of names that correspond to the scalars
+    :param writer: writer used for logging
+    :param epoch: current epoch
+    """
+    for name, scalar in zip(names, scalars):
+        writer.add_scalar(name, scalar, epoch)
+
+
+def log_images_2d(images, names, writer, epoch=0, scale_each=True):
+    """
+    Writes a list of 2D images to a tensorboard events file
+
+    :param images: list of (2D) images (in pytorch tensor format, size [B, {1,3}, Y, X]) that should be logged
+    :param names: list of names that correspond to the images
+    :param writer: writer used for logging
+    :param optional epoch: current epoch
+    :param optional scale_each: scale each image or not
+    """
+    for id, x in zip(names, images):
+        x = vutils.make_grid(x, normalize=x.max() - x.min() > 0, scale_each=scale_each)
+        writer.add_image(id, x, epoch)
+
+
+def log_images_3d(images, names, writer, epoch=0, scale_each=True):
+    """
+    Writes a list of 3D images to a tensorboard events file.
+    For efficiency reasons, the center z-slice is selected from the 3D image
+
+    :param images: list of (3D) images (in pytorch tensor format, size [B, {1,3}, Z, Y, X]) that should be logged
+    :param names: list of names that correspond to the images
+    :param writer: writer used for logging
+    :param epoch: current epoch
+    :param optional scale_each: scale each image or not
+    """
+    for id, x in zip(names, images):
+        x = x[:, :, x.size(2)//2, :, :]
+        x = vutils.make_grid(x, normalize=x.max() - x.min() > 0, scale_each=scale_each)
+        writer.add_image(id, x, epoch)
