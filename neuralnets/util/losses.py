@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage import measure
 
+from neuralnets.util.tools import tensor_to_device
+
 
 class CrossEntropyLoss(nn.Module):
     """
@@ -25,6 +27,9 @@ class CrossEntropyLoss(nn.Module):
         super(CrossEntropyLoss, self).__init__()
 
         self.class_weight = class_weight
+        # normalize class weights if necessary
+        if self.class_weight is not None:
+            self.class_weight = torch.Tensor(self.class_weight / np.sum(self.class_weight))
         self.size_average = size_average
 
     def forward(self, logits, target, weight=None):
@@ -45,7 +50,8 @@ class CrossEntropyLoss(nn.Module):
         target = target[mask]
 
         # compute negative log likelihood
-        loss = F.nll_loss(log_p, target, reduction='none', weight=self.class_weight)
+        cw = tensor_to_device(self.class_weight, device=target.device.index)
+        loss = F.nll_loss(log_p, target, reduction='none', weight=cw)
         if weight is not None:
             weight = weight[mask]
             loss = weight * loss
@@ -55,6 +61,112 @@ class CrossEntropyLoss(nn.Module):
             loss = loss.mean()
 
         return loss
+
+
+class FocalLoss(nn.Module):
+    """
+    Focal loss function (T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollar. Focal Loss for Dense Object Detection, 2017)
+
+    :param initalization alpha: weights for the classes (C)
+    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
+    :param forward logits: logits tensor (B, C, N_1, N_2, ...)
+    :param forward target: targets tensor (B, N_1, N_2, ...)
+    :return: focal loss
+    """
+
+    def __init__(self, gamma=2, alpha=None, size_average=True):
+
+        super(FocalLoss, self).__init__()
+
+        self.alpha = alpha
+        # normalize alpha if necessary
+        if self.alpha is not None:
+            self.alpha = torch.Tensor(self.alpha / np.sum(self.alpha))
+        self.gamma = gamma
+        self.size_average = size_average
+
+    def forward(self, logits, target):
+
+        # apply log softmax
+        log_p = F.log_softmax(logits, dim=1)
+        p = F.softmax(logits, dim=1)
+
+        # channels on the last axis
+        input_size = logits.size()
+        for d in range(1, len(input_size) - 1):
+            log_p = log_p.transpose(d, d + 1)
+        log_p = log_p.contiguous()
+
+        # reshape everything
+        log_p = log_p[target[:, 0, ...].unsqueeze(-1).repeat_interleave(input_size[1], dim=-1) >= 0]
+        log_p = log_p.view(-1, input_size[1])
+        p = p.view(-1, input_size[1])
+        mask = target >= 0
+        target = target[mask]
+
+        # compute negative log likelihood
+        cw = tensor_to_device(self.alpha, device=target.device.index)
+        loss = F.nll_loss((1 - p) ** self.gamma * log_p, target, reduction='none', weight=cw)
+
+        # size averaging if necessary
+        if self.size_average:
+            loss = loss.mean()
+
+        return loss
+
+
+class DiceLoss(nn.Module):
+    """
+    Dice loss function
+
+    :param initialization c: index of the class of index
+    :param forward logits: logits tensor (B, C, N_1, N_2, ...)
+    :param forward target: targets tensor (B, N_1, N_2, ...)
+    :return: dice loss
+    """
+
+    def __init__(self, c=1):
+        super(DiceLoss, self).__init__()
+
+        self.c = c
+
+    def forward(self, logits, target):
+        # apply softmax and select predictions of the class of interest
+        p = F.softmax(logits, dim=1)[:, self.c:self.c + 1, ...]
+
+        # dice loss
+        numerator = 2 * torch.sum(p * target)
+        denominator = torch.sum(p + target)
+
+        return 1 - ((numerator + 1) / (denominator + 1))
+
+
+class TverskyLoss(nn.Module):
+    """
+    Tversky loss function (S. S. M. Salehi, D. Erdogmus, and A. Gholipour. Tversky loss function for image segmentation using 3D fully convolutional deep networks, 2017)
+
+    :param initialization c: index of the class of index
+    :param forward logits: logits tensor (B, C, N_1, N_2, ...)
+    :param forward target: targets tensor (B, N_1, N_2, ...)
+    :return: tversky loss
+    """
+
+    def __init__(self, beta=0.5, c=1):
+        super(TverskyLoss, self).__init__()
+
+        self.beta = beta
+        self.c = c
+
+    def forward(self, logits, target):
+        # apply softmax and select predictions of the class of interest
+        p = F.softmax(logits, dim=1)[:, self.c:self.c + 1, ...]
+
+        # tversky loss
+        numerator = torch.sum(p * target)
+        denominator = numerator + self.beta * torch.sum((1 - target) * p) + (1 - self.beta) * torch.sum(
+            (1 - p) * target)
+
+        return 1 - ((numerator + 1) / (denominator + 1))
 
 
 class LpLoss(nn.Module):
@@ -235,3 +347,55 @@ def boundary_weight_map(labels, sigma=20, w0=1):
                 - (dtf1 + dtf2) ** 2 / (2 * sigma ** 2))
 
     return torch.Tensor(weight).cuda()
+
+
+def _parse_loss_params(t):
+
+    params = {}
+    for s in t:
+        key, val = s.split(':')
+        if val.count(',') > 0:
+            val = val.split(',')
+            for i in range(len(val)):
+                val[i] = float(val[i])
+        else:
+            val = float(val)
+        params[key] = val
+
+    return params
+
+
+def get_loss_function(s):
+    """
+    Returns a loss function according to the settings in a string. The string is formatted as follows:
+        s = <loss-function-name>[#<param>:<param-value>#<param>:<param-value>#...]
+            parameter values are either
+                - scalars
+                - vectors (written as scalars, separated by commas)
+
+    :param s: loss function specifier string, formatted as shown on top
+    :return: the required loss function
+    """
+    t = s.lower().replace("-", "_").split('#')
+    name = t[0]
+    params = _parse_loss_params(t[1:])
+    if name == "ce" or name == "cross_entropy":
+        return CrossEntropyLoss(**params)
+    elif name == "fl" or name == "focal":
+        return FocalLoss(**params)
+    elif name == "dl" or name == "dice":
+        return DiceLoss(**params)
+    elif name == "tl" or name == "tversky":
+        return TverskyLoss(**params)
+    elif name == "lp":
+        return LpLoss(**params)
+    elif name == "l2":
+        return L2Loss(**params)
+    elif name == "l1":
+        return L1Loss(**params)
+    elif name == "mse":
+        return MSELoss(**params)
+    elif name == "mad":
+        return MADLoss(**params)
+    elif name == "kld":
+        return KLDLoss(**params)

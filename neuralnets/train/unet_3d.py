@@ -16,7 +16,7 @@ from torchvision.transforms import Compose
 from neuralnets.data.datasets import StronglyLabeledVolumeDataset
 from neuralnets.networks.unet import UNet3D
 from neuralnets.util.augmentation import *
-from neuralnets.util.losses import CrossEntropyLoss
+from neuralnets.util.losses import get_loss_function
 from neuralnets.util.tools import set_seed
 from neuralnets.util.validation import validate
 
@@ -43,9 +43,11 @@ parser.add_argument("--levels", help="Number of levels in the segmentation U-Net
 parser.add_argument("--dropout", help="Dropout", type=float, default=0.0)
 parser.add_argument("--norm", help="Normalization in the network (batch or instance)", type=str, default="instance")
 parser.add_argument("--activation", help="Non-linear activations in the network", type=str, default="relu")
-parser.add_argument("--bnd_weight_map", help="Use boundary weights during training", action="store_true")
 
 # optimization parameters
+parser.add_argument("--loss", help="Specifies the loss function (and optionally, additional parameters separated by "
+                                   "hashtags and colons that specify the name) used for optimization",
+                    type=str, default="dice")
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay",
                     type=int, default=10)
@@ -58,7 +60,7 @@ parser.add_argument("--test_batch_size", help="Batch size in the testing stage",
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
-loss_fn = CrossEntropyLoss()
+loss_fn = get_loss_function(args.loss)
 
 """
 Fix seed (for reproducibility)
@@ -95,7 +97,7 @@ test_loader = DataLoader(test, batch_size=args.train_batch_size)
 """
 print('[%s] Building the network' % (datetime.datetime.now()))
 net = UNet3D(feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout, dropout_dec=args.dropout,
-             norm=args.norm, activation=args.activation, bnd_weight_map=args.bnd_weight_map)
+             norm=args.norm, activation=args.activation)
 
 """
     Setup optimization for training

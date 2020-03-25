@@ -16,7 +16,7 @@ from torchvision.transforms import Compose
 from neuralnets.data.datasets import StronglyLabeledVolumeDataset
 from neuralnets.networks.unet import UNet2D
 from neuralnets.util.augmentation import *
-from neuralnets.util.losses import CrossEntropyLoss
+from neuralnets.util.losses import get_loss_function
 from neuralnets.util.tools import set_seed
 from neuralnets.util.validation import validate
 
@@ -43,22 +43,24 @@ parser.add_argument("--levels", help="Number of levels in the segmentation U-Net
 parser.add_argument("--dropout", help="Dropout", type=float, default=0.0)
 parser.add_argument("--norm", help="Normalization in the network (batch or instance)", type=str, default="instance")
 parser.add_argument("--activation", help="Non-linear activations in the network", type=str, default="relu")
-parser.add_argument("--bnd_weight_map", help="Use boundary weights during training", action="store_true")
 
 # optimization parameters
+parser.add_argument("--loss", help="Specifies the loss function (and optionally, additional parameters separated by "
+                                   "hashtags and colons that specify the name) used for optimization",
+                    type=str, default="dice")
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay",
                     type=int, default=10)
 parser.add_argument("--gamma", help="Learning rate decay factor", type=float, default=0.9)
 parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=200)
-parser.add_argument("--len_epoch", help="Number of iteration in each epoch", type=int, default=1000)
+parser.add_argument("--len_epoch", help="Number of iteration in each epoch", type=int, default=100)
 parser.add_argument("--test_freq", help="Number of epochs between each test stage", type=int, default=1)
 parser.add_argument("--train_batch_size", help="Batch size in the training stage", type=int, default=1)
 parser.add_argument("--test_batch_size", help="Batch size in the testing stage", type=int, default=1)
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
-loss_fn = CrossEntropyLoss()
+loss_fn = get_loss_function(args.loss)
 
 """
 Fix seed (for reproducibility)
@@ -82,11 +84,11 @@ augmenter = Compose([ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0
                      RandomDeformation_2D(input_shape[1:], grid_size=(64, 64), sigma=0.01, device=args.device,
                                           include_segmentation=True),
                      AddNoise(sigma_max=0.05, include_segmentation=True)])
-train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/train'),
-                                     os.path.join(args.data_dir, 'EM/EPFL/train_labels'),
+train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/VNC/train'),
+                                     os.path.join(args.data_dir, 'EM/VNC/train_labels'),
                                      input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq')
-test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/test'),
-                                    os.path.join(args.data_dir, 'EM/EPFL/test_labels'),
+test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/VNC/test'),
+                                    os.path.join(args.data_dir, 'EM/VNC/test_labels'),
                                     input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq')
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.train_batch_size)
@@ -96,7 +98,7 @@ test_loader = DataLoader(test, batch_size=args.train_batch_size)
 """
 print('[%s] Building the network' % (datetime.datetime.now()))
 net = UNet2D(feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout, dropout_dec=args.dropout,
-             norm=args.norm, activation=args.activation, bnd_weight_map=args.bnd_weight_map)
+             norm=args.norm, activation=args.activation)
 
 """
     Setup optimization for training
