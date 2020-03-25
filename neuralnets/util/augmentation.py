@@ -97,8 +97,7 @@ class AddNoise(object):
                 noise = torch.cat((torch.normal(0, sigma, sz), torch.zeros(sz)), dim=0)
             else:
                 noise = torch.normal(0, sigma, x.size())
-            if x.is_cuda:
-                noise = noise.cuda()
+            noise = tensor_to_device(noise, device=x.device.index)
             return x + noise
         else:
             return x
