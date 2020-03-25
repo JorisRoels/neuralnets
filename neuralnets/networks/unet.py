@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
-from neuralnets.util.losses import boundary_weight_map
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d, \
     augment_samples
@@ -150,11 +149,10 @@ class UNet2D(nn.Module):
     :param optional dropout_enc: encoder dropout factor
     :param optional dropout_dec: decoder dropout factor
     :param optional activation: specify activation function ("relu", "sigmoid" or None)
-    :param optional bnd_weight_map: use boundary weight maps in training
     """
 
     def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance',
-                 activation='relu', dropout_enc=0.0, dropout_dec=0.0, bnd_weight_map=False):
+                 activation='relu', dropout_enc=0.0, dropout_dec=0.0):
         super(UNet2D, self).__init__()
 
         self.in_channels = in_channels
@@ -162,7 +160,6 @@ class UNet2D(nn.Module):
         self.feature_maps = feature_maps
         self.levels = levels
         self.norm = norm
-        self.bnd_weight_map = bnd_weight_map
         self.encoder_outputs = None
         self.decoder_outputs = None
 
@@ -224,11 +221,7 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            if self.bnd_weight_map:
-                weight = boundary_weight_map(y)
-            else:
-                weight = None
-            loss = loss_fn(y_pred, y, weight=weight)
+            loss = loss_fn(y_pred, y)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -293,11 +286,7 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            if self.bnd_weight_map:
-                weight = boundary_weight_map(y)
-            else:
-                weight = None
-            loss = loss_fn(y_pred, y, weight=weight)
+            loss = loss_fn(y_pred, y)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -522,11 +511,10 @@ class UNet3D(nn.Module):
     :param optional dropout_enc: encoder dropout factor
     :param optional dropout_dec: decoder dropout factor
     :param optional activation: specify activation function ("relu", "sigmoid" or None)
-    :param optional bnd_weight_map: use boundary weight maps in training
     """
 
     def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance',
-                 activation='relu', dropout_enc=0.0, dropout_dec=0.0, bnd_weight_map=False):
+                 activation='relu', dropout_enc=0.0, dropout_dec=0.0):
         super(UNet3D, self).__init__()
 
         self.in_channels = in_channels
@@ -534,7 +522,6 @@ class UNet3D(nn.Module):
         self.feature_maps = feature_maps
         self.levels = levels
         self.norm = norm
-        self.bnd_weight_map = bnd_weight_map
         self.encoder_outputs = None
         self.decoder_outputs = None
 
@@ -597,11 +584,7 @@ class UNet3D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            if self.bnd_weight_map:
-                weight = boundary_weight_map(y)
-            else:
-                weight = None
-            loss = loss_fn(y_pred, y, weight=weight)
+            loss = loss_fn(y_pred, y)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -666,11 +649,7 @@ class UNet3D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            if self.bnd_weight_map:
-                weight = boundary_weight_map(y)
-            else:
-                weight = None
-            loss = loss_fn(y_pred, y, weight=weight)
+            loss = loss_fn(y_pred, y)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
