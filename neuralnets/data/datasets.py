@@ -263,7 +263,7 @@ class MultiVolumeDataset(data.Dataset):
                                   mode='area')[0, 0, ...].numpy()
 
             # data is rescaled to [0,1]
-            data /= 255
+            data = data / 255
 
             self.data.append(data)
             self.data_sizes.append(data.size)
