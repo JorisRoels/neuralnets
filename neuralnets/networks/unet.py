@@ -290,8 +290,9 @@ class UNet2D(nn.Module):
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
-            y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[:, 1, ...])
-            ys.append(y[:, 0, ...].cpu().numpy())
+            for b in range(y_pred.size(0)):
+                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, 1, ...])
+                ys.append(y[b, 0, ...].cpu().numpy())
 
         # compute interesting metrics
         y_preds = np.asarray(y_preds)
@@ -653,8 +654,9 @@ class UNet3D(nn.Module):
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
-            y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[:, 1, ...])
-            ys.append(y[:, 0, ...].cpu().numpy())
+            for b in range(y_pred.size(0)):
+                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, 1, ...])
+                ys.append(y[b, 0, ...].cpu().numpy())
 
         # compute interesting metrics
         y_preds = np.asarray(y_preds)

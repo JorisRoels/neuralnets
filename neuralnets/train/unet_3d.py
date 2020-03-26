@@ -53,7 +53,7 @@ parser.add_argument("--step_size", help="Number of epochs after which the learni
                     type=int, default=10)
 parser.add_argument("--gamma", help="Learning rate decay factor", type=float, default=0.9)
 parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=200)
-parser.add_argument("--len_epoch", help="Number of iteration in each epoch", type=int, default=10)
+parser.add_argument("--len_epoch", help="Number of iteration in each epoch", type=int, default=1000)
 parser.add_argument("--test_freq", help="Number of epochs between each test stage", type=int, default=1)
 parser.add_argument("--train_batch_size", help="Batch size in the training stage", type=int, default=1)
 parser.add_argument("--test_batch_size", help="Batch size in the testing stage", type=int, default=1)
