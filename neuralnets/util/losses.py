@@ -50,7 +50,10 @@ class CrossEntropyLoss(nn.Module):
         target = target[mask]
 
         # compute negative log likelihood
-        cw = tensor_to_device(self.class_weight, device=target.device.index)
+        if self.class_weight is not None:
+            cw = tensor_to_device(self.class_weight, device=target.device.index)
+        else:
+            cw = None
         loss = F.nll_loss(log_p, target, reduction='none', weight=cw)
         if weight is not None:
             weight = weight[mask]
@@ -105,7 +108,10 @@ class FocalLoss(nn.Module):
         target = target[mask]
 
         # compute negative log likelihood
-        cw = tensor_to_device(self.alpha, device=target.device.index)
+        if self.alpha is not None:
+            cw = tensor_to_device(self.alpha, device=target.device.index)
+        else:
+            cw = None
         loss = F.nll_loss((1 - p) ** self.gamma * log_p, target, reduction='none', weight=cw)
 
         # size averaging if necessary
