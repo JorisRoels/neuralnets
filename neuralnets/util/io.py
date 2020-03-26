@@ -6,7 +6,7 @@ import numpy as np
 import tifffile as tiff
 
 
-def read_volume(file, type='tif3d', key=None, start=0, stop=-1):
+def read_volume(file, type='tif3d', key=None, start=0, stop=-1, dtype='uint8'):
     """
     Reads a volume file/directory and returns the data in it as a numpy array
 
@@ -15,19 +15,20 @@ def read_volume(file, type='tif3d', key=None, start=0, stop=-1):
     :param key: key to the data (only necessary for hdf5 files)
     :param start: first slice to read (only necessary for sequences)
     :param stop: last slice (exclusive) to read (-1 means it will read up to the final slice, only necessary for sequences)
+    :param dtype: data type of the numpy array
     :return: numpy array containing the data
     """
 
     if type == 'tif2d' or type == 'tif3d' or type == 'tif2D' or type == 'tif3D':
-        volume = read_tif(file)
+        volume = read_tif(file, dtype=dtype)
     elif type == 'tifseq':
-        volume = read_tifseq(file, start=start, stop=stop)
+        volume = read_tifseq(file, start=start, stop=stop, dtype=dtype)
     elif type == 'hdf5':
-        volume = read_hdf5(file, key=key)
+        volume = read_hdf5(file, key=key, dtype=dtype)
     elif type == 'png':
-        volume = read_png(file)
+        volume = read_png(file, dtype=dtype)
     elif type == 'pngseq':
-        volume = read_pngseq(file, start=start, stop=stop)
+        volume = read_pngseq(file, start=start, stop=stop, dtype=dtype)
     else:
         volume = None
 
@@ -134,26 +135,28 @@ def read_pngseq(dir, dtype='uint8', start=0, stop=-1):
     return data
 
 
-def write_volume(data, file, type='tif3d', start=0, stop=-1, K=4):
+def write_volume(data, file, type='tif3d', index_inc=0, start=0, stop=-1, dtype='uint8', K=4):
     """
     Writes a numpy array to a volume file/directory
 
     :param data: 2D/3D numpy array
     :param file: path to the data
     :param type: type of the volume file (tif2d, tif3d, tifseq, png or pngseq)
+    :param index_inc: increment for the index filename (only necessary for sequences)
     :param start: first slice to write (only necessary for sequences)
     :param stop: last slice (exclusive) to write (-1 means it will write up to the final slice, only necessary for sequences)
+    :param dtype: data type of the output
     :param K: length of the string index (optional, only for sequences)
     """
 
     if type == 'tif2d' or type == 'tif3d':
-        write_tif(data, file)
+        write_tif(data, file, dtype=dtype)
     elif type == 'tifseq':
-        write_tifseq(data, file, start=start, stop=stop, K=K)
+        write_tifseq(data, file, index_inc=index_inc, start=start, stop=stop, dtype=dtype, K=K)
     elif type == 'png':
-        write_png(data, file)
+        write_png(data, file, dtype=dtype)
     elif type == 'pngseq':
-        write_pngseq(data, file, start=start, stop=stop, K=K)
+        write_pngseq(data, file, index_inc=index_inc, start=start, stop=stop, dtype=dtype, K=K)
 
 
 def write_tif(x, file, dtype='uint8'):
@@ -168,36 +171,39 @@ def write_tif(x, file, dtype='uint8'):
     tiff.imsave(file, x.astype(dtype))
 
 
-def write_png(x, file):
+def write_png(x, file, dtype='uint8'):
     """
     Write a 2D data set to a PNG file
 
     :param x: 3D data array
     :param file: directory to write the data to
+    :param dtype: data type of the output
     """
 
-    cv2.imwrite(file, x.astype('uint8'), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+    cv2.imwrite(file, x.astype(dtype), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
 
-def write_jpg(x, file, quality=100):
+def write_jpg(x, file, quality=100, dtype='uint8'):
     """
     Write a 2D data set to a JPEG file
 
     :param x: 3D data array
     :param file: directory to write the data to
     :param quality: quality of the JPEG compression (0-100)
+    :param dtype: data type of the output
     """
 
-    cv2.imwrite(file, x.astype('uint8'), [cv2.IMWRITE_JPEG_QUALITY, quality])
+    cv2.imwrite(file, x.astype(dtype), [cv2.IMWRITE_JPEG_QUALITY, quality])
 
 
-def write_tifseq(x, dir, prefix='', start=0, stop=-1, dtype='uint8', K=4):
+def write_tifseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8', K=4):
     """
     Write a 3D data set to a directory, slice by slice, as TIF files
 
     :param x: 3D data array
     :param dir: directory to write the data to
     :param prefix: prefix of the separate files
+    :param index_inc: increment for the index filename (only necessary for sequences)
     :param start: first slice to write
     :param stop: last slice (exclusive) to write (-1 means it will read up to the final slice)
     :param dtype: data type of the output
@@ -209,19 +215,21 @@ def write_tifseq(x, dir, prefix='', start=0, stop=-1, dtype='uint8', K=4):
     if stop < 0:
         stop = x.shape[0]
     for i in range(start, stop):
-        i_str = _num2str(i, K=K)
+        i_str = _num2str(index_inc + i, K=K)
         tiff.imsave(dir + '/' + prefix + i_str + '.tif', (x[i, :, :]).astype(dtype))
 
 
-def write_pngseq(x, dir, prefix='', start=0, stop=-1, K=4):
+def write_pngseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8', K=4):
     """
     Write a 3D data set to a directory, slice by slice, as PNG files
 
     :param x: 3D data array
     :param dir: directory to write the data to
     :param prefix: prefix of the separate files
+    :param index_inc: increment for the index filename (only necessary for sequences)
     :param start: first slice to write
     :param stop: last slice (exclusive) to write (-1 means it will read up to the final slice)
+    :param dtype: data type of the output
     :param K: number of digits for the index
     """
 
@@ -230,8 +238,8 @@ def write_pngseq(x, dir, prefix='', start=0, stop=-1, K=4):
     if stop < 0:
         stop = x.shape[0]
     for i in range(start, stop):
-        i_str = _num2str(i, K=K)
-        cv2.imwrite(dir + '/' + prefix + i_str + '.png', (x[i, :, :]).astype('uint8'),
+        i_str = _num2str(index_inc + i, K=K)
+        cv2.imwrite(dir + '/' + prefix + i_str + '.png', (x[i, :, :]).astype(dtype),
                     [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
 
