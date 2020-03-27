@@ -295,7 +295,7 @@ class BVAE(nn.Module):
 
             # log images if necessary
             if write_images:
-                log_images_2d([x, x_pred], ['train/' + s for s in ['x', 's_pred']], writer, epoch=epoch)
+                log_images_2d([x, x_pred], ['train/' + s for s in ['x', 'x_pred']], writer, epoch=epoch)
 
         return loss_avg
 
@@ -359,7 +359,7 @@ class BVAE(nn.Module):
 
             # log images if necessary
             if write_images:
-                log_images_2d([x, x_pred], ['test/' + s for s in ['x', 's_pred']], writer, epoch=epoch)
+                log_images_2d([x, x_pred], ['test/' + s for s in ['x', 'x_pred']], writer, epoch=epoch)
 
         return loss_avg
 

@@ -10,63 +10,6 @@ from skimage import measure
 from neuralnets.util.tools import tensor_to_device
 
 
-class CrossEntropyLoss(nn.Module):
-    """
-    Cross entropy loss function
-
-    :param initalization class_weight: weights for the classes
-    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
-    :param forward logits: logits tensor (B, C, N_1, N_2, ...)
-    :param forward target: targets tensor (B, N_1, N_2, ...)
-    :param forward weight: optional weight tensor (B, N_1, N_2, ...)
-    :return: cross entropy loss
-    """
-
-    def __init__(self, class_weight=None, size_average=True):
-
-        super(CrossEntropyLoss, self).__init__()
-
-        self.class_weight = class_weight
-        # normalize class weights if necessary
-        if self.class_weight is not None:
-            self.class_weight = torch.Tensor(self.class_weight / np.sum(self.class_weight))
-        self.size_average = size_average
-
-    def forward(self, logits, target, weight=None):
-
-        # apply log softmax
-        log_p = F.log_softmax(logits, dim=1)
-
-        # channels on the last axis
-        input_size = logits.size()
-        for d in range(1, len(input_size) - 1):
-            log_p = log_p.transpose(d, d + 1)
-        log_p = log_p.contiguous()
-
-        # reshape everything
-        if logits.ndim > 2:  # check if the data is 2 or higher dimensional
-            log_p = log_p[target[:, 0, ...].unsqueeze(-1).repeat_interleave(input_size[1], dim=-1) >= 0]
-        log_p = log_p.view(-1, input_size[1])
-        mask = target >= 0
-        target = target[mask]
-
-        # compute negative log likelihood
-        if self.class_weight is not None:
-            cw = tensor_to_device(self.class_weight, device=target.device.index)
-        else:
-            cw = None
-        loss = F.nll_loss(log_p, target, reduction='none', weight=cw)
-        if weight is not None:
-            weight = weight[mask]
-            loss = weight * loss
-
-        # size averaging if necessary
-        if self.size_average:
-            loss = loss.mean()
-
-        return loss
-
-
 class FocalLoss(nn.Module):
     """
     Focal loss function (T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollar. Focal Loss for Dense Object Detection, 2017)
@@ -387,22 +330,16 @@ def get_loss_function(s):
     name = t[0]
     params = _parse_loss_params(t[1:])
     if name == "ce" or name == "cross_entropy":
-        return CrossEntropyLoss(**params)
+        return nn.CrossEntropyLoss(**params)
     elif name == "fl" or name == "focal":
         return FocalLoss(**params)
     elif name == "dl" or name == "dice":
         return DiceLoss(**params)
     elif name == "tl" or name == "tversky":
         return TverskyLoss(**params)
-    elif name == "lp":
-        return LpLoss(**params)
-    elif name == "l2":
-        return L2Loss(**params)
     elif name == "l1":
-        return L1Loss(**params)
+        return nn.L1Loss(**params)
     elif name == "mse":
-        return MSELoss(**params)
-    elif name == "mad":
-        return MADLoss(**params)
+        return nn.MSELoss(**params)
     elif name == "kld":
         return KLDLoss(**params)

@@ -16,7 +16,7 @@ from torchvision.transforms import Compose
 from neuralnets.data.datasets import UnlabeledVolumeDataset
 from neuralnets.networks.bvae import BVAE
 from neuralnets.util.augmentation import *
-from neuralnets.util.losses import MSELoss, KLDLoss
+from neuralnets.util.losses import get_loss_function
 from neuralnets.util.tools import set_seed
 
 """
@@ -58,8 +58,8 @@ parser.add_argument("--test_batch_size", help="Batch size in the testing stage",
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
-loss_rec_fn = MSELoss()
-loss_kl_fn = KLDLoss()
+loss_rec_fn = get_loss_function('mse')
+loss_kl_fn = get_loss_function('kld')
 
 """
 Fix seed (for reproducibility)

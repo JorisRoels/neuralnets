@@ -221,7 +221,7 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y)
+            loss = loss_fn(y_pred, y[:, 0, ...])
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -286,7 +286,7 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y)
+            loss = loss_fn(y_pred, y[:, 0, ...])
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -585,7 +585,7 @@ class UNet3D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y)
+            loss = loss_fn(y_pred, y[:, 0, ...])
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -650,7 +650,7 @@ class UNet3D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y)
+            loss = loss_fn(y_pred, y[:, 0, ...])
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
