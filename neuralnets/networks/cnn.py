@@ -20,9 +20,9 @@ class CNN2D(nn.Module):
     def __init__(self, conv_channels, fc_channels, input_size, kernel_size=3, norm=None, activation='relu'):
         super(CNN2D, self).__init__()
 
-        self.conv_channels = conv_channels.astype('int')
-        self.fc_channels = fc_channels
-        self.input_size = input_size
+        self.conv_channels = np.asarray(conv_channels).astype('int')
+        self.fc_channels = np.asarray(fc_channels).astype('int')
+        self.input_size = np.asarray(input_size).astype('int')
         self.kernel_size = kernel_size
 
         self.conv_features = nn.Sequential()
@@ -77,9 +77,9 @@ class CNN3D(nn.Module):
     def __init__(self, conv_channels, fc_channels, input_size, kernel_size=3, norm=None, activation='relu'):
         super(CNN3D, self).__init__()
 
-        self.conv_channels = conv_channels.astype('int')
-        self.fc_channels = fc_channels
-        self.input_size = input_size
+        self.conv_channels = np.asarray(conv_channels).astype('int')
+        self.fc_channels = np.asarray(fc_channels).astype('int')
+        self.input_size = np.asarray(input_size).astype('int')
         self.kernel_size = kernel_size
 
         self.conv_features = nn.Sequential()
