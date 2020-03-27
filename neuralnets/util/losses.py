@@ -44,7 +44,8 @@ class CrossEntropyLoss(nn.Module):
         log_p = log_p.contiguous()
 
         # reshape everything
-        log_p = log_p[target[:, 0, ...].unsqueeze(-1).repeat_interleave(input_size[1], dim=-1) >= 0]
+        if logits.ndim > 2:  # check if the data is 2 or higher dimensional
+            log_p = log_p[target[:, 0, ...].unsqueeze(-1).repeat_interleave(input_size[1], dim=-1) >= 0]
         log_p = log_p.view(-1, input_size[1])
         mask = target >= 0
         target = target[mask]
