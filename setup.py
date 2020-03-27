@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="neuralnets",
-    version="1.0.8.7",
+    version="1.0.8.8",
     author="Joris Roels",
     author_email="jorisb.roels@ugent.be",
     description="A library, based on PyTorch, that implements basic neural network algorithms and useful functions",
