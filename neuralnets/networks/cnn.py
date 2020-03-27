@@ -39,7 +39,7 @@ class CNN2D(nn.Module):
             data_size = np.divide(data_size, 2).astype('int')
 
         # full connections
-        in_channels = conv_channels[-1] * data_size[1] * data_size[2]
+        in_channels = conv_channels[-1] * data_size[0] * data_size[1]
         for i, out_channels in enumerate(fc_channels):
             if i == len(fc_channels) - 1:
                 fc = Linear(in_channels, out_channels)
@@ -96,7 +96,7 @@ class CNN3D(nn.Module):
             data_size = np.divide(data_size, 2).astype('int')
 
         # full connections
-        in_channels = conv_channels[-1] * data_size[1] * data_size[2]
+        in_channels = conv_channels[-1] * data_size[0] * data_size[1]
         for i, out_channels in enumerate(fc_channels):
             if i == len(fc_channels) - 1:
                 fc = Linear(in_channels, out_channels)
