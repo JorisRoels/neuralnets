@@ -2,6 +2,44 @@ import torch
 import torch.nn as nn
 
 
+class Linear(nn.Module):
+    """
+    Linear layer
+
+    :param in_channels: number of input channels
+    :param out_channels: number of output channels
+    :param optional dropout: dropout factor
+    :param optional activation: specify activation function ("relu", "sigmoid" or None)
+    :param optional norm: specify normalization ("batch", "instance" or None)
+    """
+
+    def __init__(self, in_channels, out_channels, dropout=0.0, activation=None, norm=None):
+        super(Linear, self).__init__()
+
+        # initialize linear layer
+        self.unit = nn.Sequential(nn.Linear(in_channels, out_channels))
+
+        # apply normalization
+        if norm == 'batch':
+            self.unit.add_module('norm', nn.BatchNorm1d(int(out_channels)))
+        elif norm == 'instance':
+            self.unit.add_module('norm', nn.InstanceNorm1d(int(out_channels)))
+
+        # apply dropout
+        if dropout > 0.0:
+            self.unit.add_module('dropout', nn.Dropout(p=dropout))
+
+        # apply activation
+        if activation == 'relu':
+            self.unit.add_module('activation', nn.ReLU())
+        elif activation == 'sigmoid':
+            self.unit.add_module('activation', nn.Sigmoid())
+
+    def forward(self, inputs):
+
+        return self.unit(inputs)
+
+
 class Conv2D(nn.Module):
     """
     2D convolutional layer
