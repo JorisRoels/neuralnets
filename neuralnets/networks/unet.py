@@ -1,6 +1,5 @@
 import datetime
 import os
-import inspect
 
 import numpy as np
 import torch
@@ -220,7 +219,7 @@ class UNet2D(nn.Module):
             # get the inputs and augment if necessary
             x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = get_labels(y, coi=self.coi, dtype=int)
-            y_ = get_labels(y_, coi=[0, 255], dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
 
             # zero the gradient buffers
             self.zero_grad()
@@ -229,7 +228,7 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=~y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -291,13 +290,13 @@ class UNet2D(nn.Module):
             y_ = get_unlabeled(y)
             x = x.float()
             y = get_labels(y, coi=self.coi, dtype=int)
-            y_ = get_labels(y_, coi=[0, 255], dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
 
             # forward prop
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=~y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -309,9 +308,9 @@ class UNet2D(nn.Module):
         # compute interesting metrics
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
-        ys_ = np.asarray(ys_)
-        j = jaccard(ys, y_preds, w=ys_)
-        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=ys_)
+        w = (1-np.asarray(ys_)).astype(bool)
+        j = jaccard(ys, y_preds, w=w)
+        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=w)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -595,7 +594,7 @@ class UNet3D(nn.Module):
             # get the inputs and augment if necessary
             x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = get_labels(y, coi=self.coi, dtype=int)
-            y_ = get_labels(y_, coi=[0, 255], dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
 
             # zero the gradient buffers
             self.zero_grad()
@@ -604,7 +603,7 @@ class UNet3D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=~y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -673,7 +672,7 @@ class UNet3D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=~y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -685,9 +684,9 @@ class UNet3D(nn.Module):
         # compute interesting metrics
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
-        ys_ = np.asarray(ys_)
-        j = jaccard(ys, y_preds, w=ys_)
-        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=ys_)
+        w = (1-np.asarray(ys_)).astype(bool)
+        j = jaccard(ys, y_preds, w=w)
+        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=w)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt

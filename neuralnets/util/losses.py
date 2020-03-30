@@ -10,6 +10,36 @@ from skimage import measure
 from neuralnets.util.tools import tensor_to_device
 
 
+class CrossEntropyLoss(nn.Module):
+    """
+    Cross entropy loss function
+
+    :param initalization weight: weights for the classes (C)
+    :param forward logits: logits tensor (B, C, N_1, N_2, ...)
+    :param forward target: targets tensor (B, N_1, N_2, ...)
+    :return: focal loss
+    """
+
+    def __init__(self, weight=None):
+
+        super(CrossEntropyLoss, self).__init__()
+
+        self.ce = nn.CrossEntropyLoss(weight=weight, reduction="none")
+
+    def forward(self, logits, target, mask=None):
+
+        # compute loss unreduced and reshape to vector
+        loss = self.ce(logits, target).view(-1)
+
+        # size averaging if necessary
+        if mask is not None:
+            loss = loss[mask.view(-1)].mean()
+        else:
+            loss = loss.mean()
+
+        return loss
+
+
 class FocalLoss(nn.Module):
     """
     Focal loss function (T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollar. Focal Loss for Dense Object Detection, 2017)
@@ -305,7 +335,7 @@ def get_loss_function(s):
     name = t[0]
     params = _parse_loss_params(t[1:])
     if name == "ce" or name == "cross_entropy":
-        return nn.CrossEntropyLoss(**params)
+        return CrossEntropyLoss(**params)
     elif name == "fl" or name == "focal":
         return FocalLoss(**params)
     elif name == "dl" or name == "dice":
