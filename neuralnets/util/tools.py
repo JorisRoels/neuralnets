@@ -206,6 +206,12 @@ def get_labels(y, coi, dtype=int):
     return labels
 
 
+def get_unlabeled(y, dtype=int):
+    unlabeled = torch.zeros_like(y, dtype=dtype)
+    unlabeled[y == 255] = 1
+    return unlabeled
+
+
 def log_scalars(scalars, names, writer, epoch=0):
     """
     Writes a list of scalars to a tensorboard events file

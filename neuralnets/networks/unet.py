@@ -1,5 +1,6 @@
 import datetime
 import os
+import inspect
 
 import numpy as np
 import torch
@@ -10,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d, \
-    augment_samples, get_labels
+    augment_samples, get_labels, get_unlabeled
 
 
 class UNetEncoder2D(nn.Module):
@@ -141,7 +142,7 @@ class UNet2D(nn.Module):
     2D U-Net
 
     :param optional in_channels: number of input channels
-    :param optional out_channels: number of output channels
+    :param optional coi: indices that correspond to the classes of interest
     :param optional feature_maps: number of initial feature maps
     :param optional levels: levels of the encoder
     :param optional skip_connections: use skip connections or not
@@ -211,9 +212,15 @@ class UNet2D(nn.Module):
             # transfer to suitable device
             data = tensor_to_device(data, device)
 
+            # filter out unlabeled pixels and include them in augmentation
+            y_ = get_unlabeled(data[1])
+            data.insert(1, data[1])
+            data.append(y_)
+
             # get the inputs and augment if necessary
-            x, y = augment_samples(data, augmenter=augmenter)
+            x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = get_labels(y, coi=self.coi, dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=int)
 
             # zero the gradient buffers
             self.zero_grad()
@@ -222,7 +229,7 @@ class UNet2D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...])
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -276,30 +283,35 @@ class UNet2D(nn.Module):
         # test loss
         y_preds = []
         ys = []
+        ys_ = []
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
             x, y = tensor_to_device(data, device)
-            y = get_labels(y, coi=self.coi, dtype=int)
+            y_ = get_unlabeled(y)
             x = x.float()
+            y = get_labels(y, coi=self.coi, dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=int)
 
             # forward prop
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...])
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
             for b in range(y_pred.size(0)):
                 y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, 1, ...])
                 ys.append(y[b, 0, ...].cpu().numpy())
+                ys_.append(y_[b, 0, ...].cpu().numpy())
 
         # compute interesting metrics
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
-        j = jaccard(ys, y_preds)
-        a, ba, p, r, f = accuracy_metrics(ys, y_preds)
+        ys_ = np.asarray(ys_)
+        j = jaccard(ys, y_preds, w=ys_)
+        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=ys_)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -505,7 +517,7 @@ class UNet3D(nn.Module):
     3D U-Net
 
     :param optional in_channels: number of input channels
-    :param optional out_channels: number of output channels
+    :param optional coi: indices that correspond to the classes of interest
     :param optional feature_maps: number of initial feature maps
     :param optional levels: levels of the encoder
     :param optional skip_connections: use skip connections or not
@@ -575,9 +587,15 @@ class UNet3D(nn.Module):
             # transfer to suitable device
             data = tensor_to_device(data, device)
 
+            # filter out unlabeled pixels and include them in augmentation
+            y_ = get_unlabeled(data[1])
+            data.insert(1, data[1])
+            data.append(y_)
+
             # get the inputs and augment if necessary
-            x, y = augment_samples(data, augmenter=augmenter)
+            x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = get_labels(y, coi=self.coi, dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=int)
 
             # zero the gradient buffers
             self.zero_grad()
@@ -586,7 +604,7 @@ class UNet3D(nn.Module):
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...])
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
@@ -641,30 +659,35 @@ class UNet3D(nn.Module):
         # test loss
         y_preds = []
         ys = []
+        ys_ = []
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
             x, y = tensor_to_device(data, device)
-            y = get_labels(y, coi=self.coi, dtype=int)
+            y_ = get_unlabeled(y)
             x = x.float()
+            y = get_labels(y, coi=self.coi, dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=int)
 
             # forward prop
             y_pred = self(x)
 
             # compute loss
-            loss = loss_fn(y_pred, y[:, 0, ...])
+            loss = loss_fn(y_pred, y[:, 0, ...], mask=y_)
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
             for b in range(y_pred.size(0)):
                 y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, 1, ...])
                 ys.append(y[b, 0, ...].cpu().numpy())
+                ys_.append(y_[b, 0, ...].cpu().numpy())
 
         # compute interesting metrics
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
-        j = jaccard(ys, y_preds)
-        a, ba, p, r, f = accuracy_metrics(ys, y_preds)
+        ys_ = np.asarray(ys_)
+        j = jaccard(ys, y_preds, w=ys_)
+        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=ys_)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
