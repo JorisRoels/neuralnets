@@ -33,7 +33,10 @@ class CrossEntropyLoss(nn.Module):
 
         # size averaging if necessary
         if mask is not None:
-            loss = loss[mask.view(-1)].mean()
+            if mask.sum() > 0:
+                loss = loss[mask.view(-1)].mean()
+            else:
+                loss = 0 * loss.mean()
         else:
             loss = loss.mean()
 
@@ -86,10 +89,10 @@ class FocalLoss(nn.Module):
         loss = F.nll_loss((1 - p) ** self.gamma * log_p, target, reduction='none', weight=cw)
 
         # size averaging if necessary
-        if mask is not None:
+        if mask.sum() > 0:
             loss = loss[mask.view(-1)].mean()
         else:
-            loss = loss.mean()
+            loss = 0 * loss.mean()
 
         return loss
 
@@ -305,7 +308,6 @@ def boundary_weight_map(labels, sigma=20, w0=1):
 
 
 def _parse_loss_params(t):
-
     params = {}
     for s in t:
         key, val = s.split(':')
