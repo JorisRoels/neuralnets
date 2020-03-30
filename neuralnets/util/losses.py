@@ -15,13 +15,12 @@ class FocalLoss(nn.Module):
     Focal loss function (T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollar. Focal Loss for Dense Object Detection, 2017)
 
     :param initalization alpha: weights for the classes (C)
-    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
     :param forward logits: logits tensor (B, C, N_1, N_2, ...)
     :param forward target: targets tensor (B, N_1, N_2, ...)
     :return: focal loss
     """
 
-    def __init__(self, gamma=2, alpha=None, size_average=True):
+    def __init__(self, gamma=2, alpha=None):
 
         super(FocalLoss, self).__init__()
 
@@ -30,9 +29,8 @@ class FocalLoss(nn.Module):
         if self.alpha is not None:
             self.alpha = torch.Tensor(self.alpha / np.sum(self.alpha))
         self.gamma = gamma
-        self.size_average = size_average
 
-    def forward(self, logits, target):
+    def forward(self, logits, target, mask=None):
 
         # apply log softmax
         log_p = F.log_softmax(logits, dim=1)
@@ -48,8 +46,7 @@ class FocalLoss(nn.Module):
         log_p = log_p[target[:, 0, ...].unsqueeze(-1).repeat_interleave(input_size[1], dim=-1) >= 0]
         log_p = log_p.view(-1, input_size[1])
         p = p.view(-1, input_size[1])
-        mask = target >= 0
-        target = target[mask]
+        target = target.view(-1)
 
         # compute negative log likelihood
         if self.alpha is not None:
@@ -59,7 +56,9 @@ class FocalLoss(nn.Module):
         loss = F.nll_loss((1 - p) ** self.gamma * log_p, target, reduction='none', weight=cw)
 
         # size averaging if necessary
-        if self.size_average:
+        if mask is not None:
+            loss = loss[mask.view(-1)].mean()
+        else:
             loss = loss.mean()
 
         return loss
@@ -80,9 +79,19 @@ class DiceLoss(nn.Module):
 
         self.c = c
 
-    def forward(self, logits, target):
+    def forward(self, logits, target, mask=None):
         # apply softmax and select predictions of the class of interest
         p = F.softmax(logits, dim=1)[:, self.c:self.c + 1, ...]
+
+        # reshape everything to vectors
+        p = p.view(-1)
+        target = p.view(-1)
+
+        # mask if necessary
+        if mask is not None:
+            mask = mask.view(-1)
+            p = p[mask]
+            target = target[mask]
 
         # dice loss
         numerator = 2 * torch.sum(p * target)
@@ -107,9 +116,19 @@ class TverskyLoss(nn.Module):
         self.beta = beta
         self.c = c
 
-    def forward(self, logits, target):
+    def forward(self, logits, target, mask=None):
         # apply softmax and select predictions of the class of interest
         p = F.softmax(logits, dim=1)[:, self.c:self.c + 1, ...]
+
+        # reshape everything to vectors
+        p = p.view(-1)
+        target = p.view(-1)
+
+        # mask if necessary
+        if mask is not None:
+            mask = mask.view(-1)
+            p = p[mask]
+            target = target[mask]
 
         # tversky loss
         numerator = torch.sum(p * target)
@@ -162,50 +181,6 @@ class L2Loss(nn.Module):
     def forward(self, input, target):
         target_rec = torch.sigmoid(input)
         loss = torch.sqrt(torch.sum(torch.pow(target - target_rec, 2)))
-        if self.size_average:
-            loss = loss / target.numel()
-        return loss
-
-
-class L1Loss(nn.Module):
-    """
-    L_1 loss function
-
-    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
-    :param forward pred: predictions tensor (N_1, N_2, ...)
-    :param forward target: targets tensor (N_1, N_2, ...)
-    :return: L_1 loss
-    """
-
-    def __init__(self, size_average=True):
-        super(L1Loss, self).__init__()
-
-        self.size_average = size_average
-
-    def forward(self, pred, target):
-        loss = torch.sum(torch.abs(target - pred))
-        if self.size_average:
-            loss = loss / target.numel()
-        return loss
-
-
-class MSELoss(nn.Module):
-    """
-    Mean squared error (MSE) loss function
-
-    :param initalization size_average: flag that specifies whether to apply size averaging at the end or not
-    :param forward pred: predictions tensor (N_1, N_2, ...)
-    :param forward target: targets tensor (N_1, N_2, ...)
-    :return: MSE loss
-    """
-
-    def __init__(self, size_average=True):
-        super(MSELoss, self).__init__()
-
-        self.size_average = size_average
-
-    def forward(self, pred, target):
-        loss = torch.sum(torch.pow(target - pred, 2))
         if self.size_average:
             loss = loss / target.numel()
         return loss
