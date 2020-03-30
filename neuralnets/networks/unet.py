@@ -213,14 +213,13 @@ class UNet2D(nn.Module):
             y = get_labels(data[1], coi=self.coi, dtype=float)
 
             # filter out unlabeled pixels and include them in augmentation
-            y_ = get_unlabeled(data[1])
-            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
+            y_ = get_unlabeled(data[1], dtype=float)
             data.insert(1, y)
             data.append(y_)
 
             # perform augmentation and transform to appropriate type
             x, y, _, y_ = augment_samples(data, augmenter=augmenter)
-            y = get_labels(y, coi=np.arange(self.out_channels), dtype=int)
+            y = y.round().long()
             y_ = y_.bool()
 
             # zero the gradient buffers
@@ -590,14 +589,13 @@ class UNet3D(nn.Module):
             y = get_labels(data[1], coi=self.coi, dtype=float)
 
             # filter out unlabeled pixels and include them in augmentation
-            y_ = get_unlabeled(data[1])
-            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
+            y_ = get_unlabeled(data[1], dtype=float)
             data.insert(1, y)
             data.append(y_)
 
             # perform augmentation and transform to appropriate type
             x, y, _, y_ = augment_samples(data, augmenter=augmenter)
-            y = get_labels(y, coi=np.arange(self.out_channels), dtype=int)
+            y = y.round().long()
             y_ = y_.bool()
 
             # zero the gradient buffers

@@ -200,13 +200,31 @@ def get_labels(y, coi, dtype=int):
     :return: indexed label tensor, ready for use in most loss functions (B, N_1, N_2, ...)
     """
     labels = torch.zeros_like(y, dtype=dtype)
+
+    # convert labels to integers
+    y = torch.round(y.float()).long()
+
+    # loop over classes of interest
     for i, c in enumerate(coi):
         if i > 0:
-            labels[torch.abs(y - c) < 0.5] = i
+            labels[y == c] = i
+
+    # check if other classes are annotated, these can be labeled as background
+    for c in torch.unique(y):
+        if not c in coi and not c == 255:
+            labels[y == c] = 0
     return labels
 
 
 def get_unlabeled(y, dtype=int):
+    """
+    Maps general annotated image tensors to an indexed image of unlabeled pixels
+
+    :param y: annotated image tensor (B, N_1, N_2, ...)
+    :param coi: classes of interest
+    :param optional dtype: type of the tensor (typically integers)
+    :return: indexed label tensor, ready for use in most loss functions (B, N_1, N_2, ...)
+    """
     unlabeled = torch.zeros_like(y, dtype=dtype)
     unlabeled[y == 255] = 1
     return unlabeled
