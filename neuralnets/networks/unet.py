@@ -208,18 +208,20 @@ class UNet2D(nn.Module):
         # start epoch
         for i, data in enumerate(loader):
 
-            # transfer to suitable device
+            # transfer to suitable device and get labels
             data = tensor_to_device(data, device)
+            y = get_labels(data[1], coi=self.coi, dtype=float)
 
             # filter out unlabeled pixels and include them in augmentation
             y_ = get_unlabeled(data[1])
-            data.insert(1, data[1])
+            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
+            data.insert(1, y)
             data.append(y_)
 
-            # get the inputs and augment if necessary
-            x, _, y, y_ = augment_samples(data, augmenter=augmenter)
-            y = get_labels(y, coi=self.coi, dtype=int)
-            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
+            # perform augmentation and transform to appropriate type
+            x, y, _, y_ = augment_samples(data, augmenter=augmenter)
+            y = get_labels(y, coi=np.arange(self.out_channels), dtype=int)
+            y_ = y_.bool()
 
             # zero the gradient buffers
             self.zero_grad()
@@ -583,18 +585,20 @@ class UNet3D(nn.Module):
         # start epoch
         for i, data in enumerate(loader):
 
-            # transfer to suitable device
+            # transfer to suitable device and get labels
             data = tensor_to_device(data, device)
+            y = get_labels(data[1], coi=self.coi, dtype=float)
 
             # filter out unlabeled pixels and include them in augmentation
             y_ = get_unlabeled(data[1])
-            data.insert(1, data[1])
+            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
+            data.insert(1, y)
             data.append(y_)
 
-            # get the inputs and augment if necessary
-            x, _, y, y_ = augment_samples(data, augmenter=augmenter)
-            y = get_labels(y, coi=self.coi, dtype=int)
-            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
+            # perform augmentation and transform to appropriate type
+            x, y, _, y_ = augment_samples(data, augmenter=augmenter)
+            y = get_labels(y, coi=np.arange(self.out_channels), dtype=int)
+            y_ = y_.bool()
 
             # zero the gradient buffers
             self.zero_grad()
