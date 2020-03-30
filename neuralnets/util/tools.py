@@ -190,6 +190,22 @@ def augment_samples(data, augmenter=None):
     return data
 
 
+def get_labels(y, coi, dtype=int):
+    """
+    Maps general annotated image tensors to indexed labels for particular classes of interest
+
+    :param y: annotated image tensor (B, N_1, N_2, ...)
+    :param coi: classes of interest
+    :param optional dtype: type of the tensor (typically integers)
+    :return: indexed label tensor, ready for use in most loss functions (B, N_1, N_2, ...)
+    """
+    labels = torch.zeros_like(y, dtype=dtype)
+    for i, c in enumerate(coi):
+        if i > 0:
+            labels[torch.abs(y - c) < 0.5] = i
+    return labels
+
+
 def log_scalars(scalars, names, writer, epoch=0):
     """
     Writes a list of scalars to a tensorboard events file

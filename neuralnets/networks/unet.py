@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d, \
-    augment_samples
+    augment_samples, get_labels
 
 
 class UNetEncoder2D(nn.Module):
@@ -151,12 +151,13 @@ class UNet2D(nn.Module):
     :param optional activation: specify activation function ("relu", "sigmoid" or None)
     """
 
-    def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance',
+    def __init__(self, in_channels=1, coi=(0, 1), feature_maps=64, levels=4, skip_connections=True, norm='instance',
                  activation='relu', dropout_enc=0.0, dropout_dec=0.0):
         super(UNet2D, self).__init__()
 
         self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.coi = coi
+        self.out_channels = len(coi)
         self.feature_maps = feature_maps
         self.levels = levels
         self.norm = norm
@@ -167,7 +168,7 @@ class UNet2D(nn.Module):
         self.encoder = UNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
                                      dropout=dropout_enc, activation=activation)
         # expansive path
-        self.decoder = UNetDecoder2D(out_channels, feature_maps=feature_maps, levels=levels,
+        self.decoder = UNetDecoder2D(self.out_channels, feature_maps=feature_maps, levels=levels,
                                      skip_connections=skip_connections, norm=norm, dropout=dropout_dec,
                                      activation=activation)
 
@@ -212,7 +213,7 @@ class UNet2D(nn.Module):
 
             # get the inputs and augment if necessary
             x, y = augment_samples(data, augmenter=augmenter)
-            y = y.long()
+            y = get_labels(y, coi=self.coi, dtype=int)
 
             # zero the gradient buffers
             self.zero_grad()
@@ -279,8 +280,8 @@ class UNet2D(nn.Module):
 
             # get the inputs and transfer to suitable device
             x, y = tensor_to_device(data, device)
+            y = get_labels(y, coi=self.coi, dtype=int)
             x = x.float()
-            y = y.long()
 
             # forward prop
             y_pred = self(x)
@@ -514,12 +515,13 @@ class UNet3D(nn.Module):
     :param optional activation: specify activation function ("relu", "sigmoid" or None)
     """
 
-    def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, skip_connections=True, norm='instance',
+    def __init__(self, in_channels=1, coi=(0, 1), feature_maps=64, levels=4, skip_connections=True, norm='instance',
                  activation='relu', dropout_enc=0.0, dropout_dec=0.0):
         super(UNet3D, self).__init__()
 
         self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.coi = coi
+        self.out_channels = len(coi)
         self.feature_maps = feature_maps
         self.levels = levels
         self.norm = norm
@@ -530,7 +532,7 @@ class UNet3D(nn.Module):
         self.encoder = UNetEncoder3D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
                                      dropout=dropout_enc, activation=activation)
         # expansive path
-        self.decoder = UNetDecoder3D(out_channels, feature_maps=feature_maps, levels=levels,
+        self.decoder = UNetDecoder3D(self.out_channels, feature_maps=feature_maps, levels=levels,
                                      skip_connections=skip_connections, norm=norm, dropout=dropout_dec,
                                      activation=activation)
 
@@ -574,9 +576,8 @@ class UNet3D(nn.Module):
             data = tensor_to_device(data, device)
 
             # get the inputs and augment if necessary
-            if augmenter is not None:
-                x, y = augment_samples(data, augmenter=augmenter)
-                y = y.long()
+            x, y = augment_samples(data, augmenter=augmenter)
+            y = get_labels(y, coi=self.coi, dtype=int)
 
             # zero the gradient buffers
             self.zero_grad()
@@ -643,8 +644,9 @@ class UNet3D(nn.Module):
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
-            x = tensor_to_device(data[0].float(), device)
-            y = tensor_to_device(data[1].long(), device)
+            x, y = tensor_to_device(data, device)
+            y = get_labels(y, coi=self.coi, dtype=int)
+            x = x.float()
 
             # forward prop
             y_pred = self(x)
