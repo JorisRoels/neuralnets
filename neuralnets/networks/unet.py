@@ -219,6 +219,8 @@ class UNet2D(nn.Module):
 
             # perform augmentation and transform to appropriate type
             x, _, y, y_ = augment_samples(data, augmenter=augmenter)
+            while (1-y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
+                x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = y.round().long()
             y_ = y_.bool()
 
@@ -595,6 +597,8 @@ class UNet3D(nn.Module):
 
             # perform augmentation and transform to appropriate type
             x, _, y, y_ = augment_samples(data, augmenter=augmenter)
+            while (1-y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
+                x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = y.round().long()
             y_ = y_.bool()
 
