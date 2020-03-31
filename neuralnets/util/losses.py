@@ -33,10 +33,7 @@ class CrossEntropyLoss(nn.Module):
 
         # size averaging if necessary
         if mask is not None:
-            if float(mask.float().sum().data.cpu().numpy()) > 0:
-                loss = loss[mask.view(-1)].mean()
-            else:
-                loss = 0 * loss.mean()
+            loss = loss[mask.view(-1)].mean()
         else:
             loss = loss.mean()
 
@@ -90,10 +87,7 @@ class FocalLoss(nn.Module):
 
         # size averaging if necessary
         if mask is not None:
-            if float(mask.float().sum().data.cpu().numpy()) > 0:
-                loss = loss[mask.view(-1)].mean()
-            else:
-                loss = 0 * loss.mean()
+            loss = loss[mask.view(-1)].mean()
         else:
             loss = loss.mean()
 

@@ -56,10 +56,11 @@ class StronglyLabeledStandardDataset(StandardDataset):
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     """
 
-    def __init__(self, data_path, label_path, scaling=None, type='tif3d'):
+    def __init__(self, data_path, label_path, scaling=None, type='tif3d', coi=(0, 1)):
         super().__init__(data_path, scaling=scaling, type=type)
 
         self.label_path = label_path
+        self.coi = coi
 
         # load labels
         self.labels = read_volume(label_path, type=type)
@@ -83,7 +84,7 @@ class StronglyLabeledStandardDataset(StandardDataset):
             # add channel axis if the data is 3D
             input, target = input[np.newaxis, ...], target[np.newaxis, ...]
 
-        if target.min() == 255:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(np.unique(target), self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             return self.__getitem__(i)
         else:
             return input, target
@@ -170,10 +171,11 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     """
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d'):
+    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1)):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
 
         self.label_path = label_path
+        self.coi = coi
 
         # load labels
         self.labels = read_volume(label_path, type=type)
@@ -196,7 +198,7 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
             # add channel axis if the data is 3D
             input, target = input[np.newaxis, ...], target[np.newaxis, ...]
 
-        if target.min() == 255:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(np.unique(target), self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             return self.__getitem__(i)
         else:
             return input, target
@@ -301,11 +303,12 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
-                 sampling_mode='uniform'):
+                 sampling_mode='uniform', coi=(0, 1)):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
                          sampling_mode=sampling_mode)
 
         self.label_path = label_path
+        self.coi = coi
 
         # load the data
         self.labels = []
@@ -338,7 +341,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
             # add channel axis if the data is 3D
             input, target = input[np.newaxis, ...], target[np.newaxis, ...]
 
-        if target.min() == 255:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(np.unique(target), self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             return self.__getitem__(i)
         else:
             return input, target
