@@ -214,11 +214,11 @@ class UNet2D(nn.Module):
 
             # filter out unlabeled pixels and include them in augmentation
             y_ = get_unlabeled(data[1], dtype=float)
-            data.insert(1, y)
+            data.append(y)
             data.append(y_)
 
             # perform augmentation and transform to appropriate type
-            x, y, _, y_ = augment_samples(data, augmenter=augmenter)
+            x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = y.round().long()
             y_ = y_.bool()
 
@@ -594,7 +594,7 @@ class UNet3D(nn.Module):
             data.append(y_)
 
             # perform augmentation and transform to appropriate type
-            x, y, _, y_ = augment_samples(data, augmenter=augmenter)
+            x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = y.round().long()
             y_ = y_.bool()
 
