@@ -101,12 +101,12 @@ def _pad(data, input_shape):
 
 
 def _crop(data, seg_cum, counts_cum, pad_width):
-    return data[:, pad_width[0][0]:data.shape[1] - pad_width[0][1], pad_width[1][0]:data.shape[2] - pad_width[1][1],
-           pad_width[2][0]:data.shape[3] - pad_width[2][1]], \
-           seg_cum[pad_width[0][0]:data.shape[1] - pad_width[0][1], pad_width[1][0]:data.shape[2] - pad_width[1][1],
-           pad_width[2][0]:data.shape[3] - pad_width[2][1]], \
-           counts_cum[pad_width[0][0]:data.shape[1] - pad_width[0][1], pad_width[1][0]:data.shape[2] - pad_width[1][1],
-           pad_width[2][0]:data.shape[3] - pad_width[2][1]]
+    return data[:, pad_width[1][0]:data.shape[1] - pad_width[1][1], pad_width[2][0]:data.shape[2] - pad_width[2][1],
+           pad_width[3][0]:data.shape[3] - pad_width[3][1]], \
+           seg_cum[pad_width[1][0]:data.shape[1] - pad_width[1][1], pad_width[2][0]:data.shape[2] - pad_width[2][1],
+           pad_width[3][0]:data.shape[3] - pad_width[3][1]], \
+           counts_cum[pad_width[1][0]:data.shape[1] - pad_width[1][1], pad_width[2][0]:data.shape[2] - pad_width[2][1],
+           pad_width[3][0]:data.shape[3] - pad_width[3][1]]
 
 
 def _forward_prop(net, x):
