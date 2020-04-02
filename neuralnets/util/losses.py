@@ -24,7 +24,10 @@ class CrossEntropyLoss(nn.Module):
 
         super(CrossEntropyLoss, self).__init__()
 
-        self.ce = nn.CrossEntropyLoss(weight=tensor_to_device(torch.Tensor(weight), device=device), reduction="none")
+        w = None
+        if weight is not None:
+            w = tensor_to_device(torch.Tensor(weight), device=device)
+        self.ce = nn.CrossEntropyLoss(weight=w, reduction="none")
 
     def forward(self, logits, target, mask=None):
 
