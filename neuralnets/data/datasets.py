@@ -329,7 +329,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     def __getitem__(self, i):
 
         # select dataset
-        if self.sampling_mode is 'uniform':
+        if self.sampling_mode == 'uniform':
             k = np.random.randint(0, len(self.data))
         else:
             k = np.random.choice(len(self.data), p=self.data_sizes)
@@ -369,7 +369,7 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
     def __getitem__(self, i):
 
         # select dataset
-        if self.sampling_mode is 'uniform':
+        if self.sampling_mode == 'uniform':
             k = np.random.randint(0, len(self.data))
         else:
             k = np.random.choice(len(self.data), p=self.data_sizes)
