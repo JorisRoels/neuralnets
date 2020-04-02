@@ -20,11 +20,11 @@ class CrossEntropyLoss(nn.Module):
     :return: focal loss
     """
 
-    def __init__(self, weight=None):
+    def __init__(self, weight=None, device=0):
 
         super(CrossEntropyLoss, self).__init__()
 
-        self.ce = nn.CrossEntropyLoss(weight=weight, reduction="none")
+        self.ce = nn.CrossEntropyLoss(weight=tensor_to_device(torch.Tensor(weight), device=device), reduction="none")
 
     def forward(self, logits, target, mask=None):
 
