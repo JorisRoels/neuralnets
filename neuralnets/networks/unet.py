@@ -322,8 +322,8 @@ class UNet2D(nn.Module):
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
         w = (1 - np.asarray(ys_)).astype(bool)
-        js = [jaccard((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in range(1, len(self.coi))]
-        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in
+        js = [jaccard((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in range(1, len(self.coi))]
+        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in
                range(1, len(self.coi))]
 
         # don't forget to compute the average and print it
@@ -721,8 +721,8 @@ class UNet3D(nn.Module):
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
         w = (1 - np.asarray(ys_)).astype(bool)
-        js = [jaccard((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in range(1, len(self.coi))]
-        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in
+        js = [jaccard((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in range(1, len(self.coi))]
+        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in
                range(1, len(self.coi))]
 
         # don't forget to compute the average and print it
