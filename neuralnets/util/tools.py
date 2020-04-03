@@ -4,6 +4,7 @@ import random
 import numpy as np
 import torch
 import torchvision.utils as vutils
+from scipy.ndimage.morphology import binary_opening
 
 from neuralnets.util.io import read_volume
 
@@ -275,3 +276,17 @@ def log_images_3d(images, names, writer, epoch=0, scale_each=True):
         x = x[:, :, x.size(2) // 2, :, :]
         x = vutils.make_grid(x, normalize=x.max() - x.min() > 0, scale_each=scale_each)
         writer.add_image(id, x, epoch)
+
+
+def clean_labels(y, n_classes):
+    y_clean = y
+    y = y.data.cpu().numpy()
+    for b in range(y.shape[0]):
+        y_b = y_clean[b, 0, ...]
+        for c in range(n_classes):
+            if not (c == 0 or c == y.shape[1] - 1):
+                mask = binary_opening(y[b, 0, ...] == c)
+                y_b[y_b == c] = 0
+                y_b[mask] = c
+        y_clean[b, 0, ...] = y_b
+    return y_clean

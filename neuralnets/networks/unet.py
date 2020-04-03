@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d, \
-    augment_samples, get_labels, get_unlabeled
+    augment_samples, get_labels, get_unlabeled, clean_labels
 
 
 class UNetEncoder2D(nn.Module):
@@ -219,9 +219,12 @@ class UNet2D(nn.Module):
 
             # perform augmentation and transform to appropriate type
             x, _, y, y_ = augment_samples(data, augmenter=augmenter)
-            while (1-y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
+            while (1 - y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
                 x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = y.round().long()
+            # clean labels if necessary (due to augmentations)
+            if len(self.coi) > 2:
+                y = clean_labels(y, len(self.coi))
             y_ = y_.bool()
 
             # zero the gradient buffers
@@ -258,8 +261,15 @@ class UNet2D(nn.Module):
 
             # log images if necessary
             if write_images:
-                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
-                log_images_2d([x, y, y_pred], ['train/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
+                log_images_2d([x], ['train/' + s for s in ['x']], writer, epoch=epoch)
+                y_pred = F.softmax(y_pred, dim=1)
+                for i, c in enumerate(self.coi):
+                    if not i == 0:  # skip background class
+                        y_p = y_pred[:, i:i + 1, ...].data
+                        y_t = (y == i).long()
+                        log_images_2d([y_t, y_p],
+                                      ['train/' + s for s in ['y_class_%d)' % (c), 'y_pred_class_%d)' % (c)]], writer,
+                                      epoch=epoch)
 
         return loss_avg
 
@@ -304,16 +314,14 @@ class UNet2D(nn.Module):
             cnt += 1
 
             for b in range(y_pred.size(0)):
-                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, 1, ...])
+                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, ...])
                 ys.append(y[b, 0, ...].cpu().numpy())
                 ys_.append(y_[b, 0, ...].cpu().numpy())
 
-        # compute interesting metrics
+        # prep for metric computation
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
-        w = (1-np.asarray(ys_)).astype(bool)
-        j = jaccard(ys, y_preds, w=w)
-        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=w)
+        w = (1 - np.asarray(ys_)).astype(bool)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -324,14 +332,28 @@ class UNet2D(nn.Module):
         if writer is not None:
 
             # always log scalars
-            log_scalars([loss_avg, j, a, ba, p, r, f], ['test/' + s for s in
-                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced-accuracy',
-                                                         'precision', 'recall', 'f-score']], writer, epoch=epoch)
+            log_scalars([loss_avg], ['test/' + s for s in ['loss-seg']], writer, epoch=epoch)
+            for i, c in enumerate(self.coi):
+                if not i == 0:  # skip background class
+                    j = jaccard((ys == i).astype(int), y_preds[:, c, ...], w=w)
+                    a, ba, p, r, f = accuracy_metrics((ys == i).astype(int), y_preds[:, c, ...], w=w)
+                    log_scalars([j, a, ba, p, r, f], ['test/' + s for s in
+                                                      ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
+                                                       'balanced-accuracy_class_%d)' % (c), 'precision_class_%d)' % (c),
+                                                       'recall_class_%d)' % (c), 'f-score_class_%d)' % (c)]], writer,
+                                epoch=epoch)
 
             # log images if necessary
             if write_images:
-                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
-                log_images_2d([x, y, y_pred], ['test/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
+                log_images_2d([x], ['test/' + s for s in ['x']], writer, epoch=epoch)
+                y_pred = F.softmax(y_pred, dim=1)
+                for i, c in enumerate(self.coi):
+                    if not i == 0:  # skip background class
+                        y_p = y_pred[:, i:i + 1, ...].data
+                        y_t = (y == i).long()
+                        log_images_2d([y_t, y_p],
+                                      ['test/' + s for s in ['y_class_%d)' % (c), 'y_pred_class_%d)' % (c)]], writer,
+                                      epoch=epoch)
 
         return loss_avg
 
@@ -597,7 +619,7 @@ class UNet3D(nn.Module):
 
             # perform augmentation and transform to appropriate type
             x, _, y, y_ = augment_samples(data, augmenter=augmenter)
-            while (1-y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
+            while (1 - y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
                 x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = y.round().long()
             y_ = y_.bool()
@@ -637,8 +659,15 @@ class UNet3D(nn.Module):
 
             # log images if necessary
             if write_images:
-                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
-                log_images_3d([x, y, y_pred], ['train/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
+                log_images_3d([x], ['train/' + s for s in ['x']], writer, epoch=epoch)
+                y_pred = F.softmax(y_pred, dim=1)
+                for i, c in enumerate(self.coi):
+                    if not i == 0:  # skip background class
+                        y_p = y_pred[:, i:i + 1, ...].data
+                        y_t = (y == i).long()
+                        log_images_3d([y_t, y_p],
+                                      ['train/' + s for s in ['y_class_%d)' % (c), 'y_pred_class_%d)' % (c)]], writer,
+                                      epoch=epoch)
 
         return loss_avg
 
@@ -683,33 +712,46 @@ class UNet3D(nn.Module):
             cnt += 1
 
             for b in range(y_pred.size(0)):
-                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, 1, ...])
+                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, ...])
                 ys.append(y[b, 0, ...].cpu().numpy())
                 ys_.append(y_[b, 0, ...].cpu().numpy())
 
-        # compute interesting metrics
+        # prep for metric computation
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
-        w = (1-np.asarray(ys_)).astype(bool)
-        j = jaccard(ys, y_preds, w=w)
-        a, ba, p, r, f = accuracy_metrics(ys, y_preds, w=w)
+        w = (1 - np.asarray(ys_)).astype(bool)
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average test loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
+        print('[%s] Epoch %5d - Average test loss: %.6f'
+              % (datetime.datetime.now(), epoch, loss_avg))
 
         # log everything
         if writer is not None:
 
             # always log scalars
-            log_scalars([loss_avg, j, a, ba, p, r, f], ['test/' + s for s in
-                                                        ['loss-seg', 'jaccard', 'accuracy', 'balanced-accuracy',
-                                                         'precision', 'recall', 'f-score']], writer, epoch=epoch)
+            log_scalars([loss_avg], ['test/' + s for s in ['loss-seg']], writer, epoch=epoch)
+            for i, c in enumerate(self.coi):
+                if not i == 0:  # skip background class
+                    j = jaccard((ys == i).astype(int), y_preds[:, c, ...], w=w)
+                    a, ba, p, r, f = accuracy_metrics((ys == i).astype(int), y_preds[:, c, ...], w=w)
+                    log_scalars([j, a, ba, p, r, f], ['test/' + s for s in
+                                                      ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
+                                                       'balanced-accuracy_class_%d)' % (c), 'precision_class_%d)' % (c),
+                                                       'recall_class_%d)' % (c), 'f-score_class_%d)' % (c)]], writer,
+                                epoch=epoch)
 
             # log images if necessary
             if write_images:
-                y_pred = F.softmax(y_pred, dim=1)[:, 1:2, :, :].data
-                log_images_3d([x, y, y_pred], ['test/' + s for s in ['x', 'y', 'y_pred']], writer, epoch=epoch)
+                log_images_3d([x], ['test/' + s for s in ['x']], writer, epoch=epoch)
+                y_pred = F.softmax(y_pred, dim=1)
+                for i, c in enumerate(self.coi):
+                    if not i == 0:  # skip background class
+                        y_p = y_pred[:, i:i + 1, ...].data
+                        y_t = (y == i).long()
+                        log_images_3d([y_t, y_p],
+                                      ['test/' + s for s in ['y_class_%d)' % (c), 'y_pred_class_%d)' % (c)]], writer,
+                                      epoch=epoch)
 
         return loss_avg
 
