@@ -322,6 +322,9 @@ class UNet2D(nn.Module):
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
         w = (1 - np.asarray(ys_)).astype(bool)
+        js = [jaccard((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in range(1, len(self.coi))]
+        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in
+               range(1, len(self.coi))]
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -335,13 +338,11 @@ class UNet2D(nn.Module):
             log_scalars([loss_avg], ['test/' + s for s in ['loss-seg']], writer, epoch=epoch)
             for i, c in enumerate(self.coi):
                 if not i == 0:  # skip background class
-                    j = jaccard((ys == i).astype(int), y_preds[:, c, ...], w=w)
-                    a, ba, p, r, f = accuracy_metrics((ys == i).astype(int), y_preds[:, c, ...], w=w)
-                    log_scalars([j, a, ba, p, r, f], ['test/' + s for s in
-                                                      ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
-                                                       'balanced-accuracy_class_%d)' % (c), 'precision_class_%d)' % (c),
-                                                       'recall_class_%d)' % (c), 'f-score_class_%d)' % (c)]], writer,
-                                epoch=epoch)
+                    log_scalars([js[i - 1], *(ams[i - 1])], ['test/' + s for s in
+                                                             ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
+                                                              'balanced-accuracy_class_%d)' % (c),
+                                                              'precision_class_%d)' % (c), 'recall_class_%d)' % (c),
+                                                              'f-score_class_%d)' % (c)]], writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
@@ -355,7 +356,7 @@ class UNet2D(nn.Module):
                                       ['test/' + s for s in ['y_class_%d)' % (c), 'y_pred_class_%d)' % (c)]], writer,
                                       epoch=epoch)
 
-        return loss_avg
+        return np.mean(js)
 
     def train_net(self, train_loader, test_loader, loss_fn, optimizer, epochs, scheduler=None, test_freq=1,
                   augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, device=0):
@@ -380,7 +381,7 @@ class UNet2D(nn.Module):
         else:
             writer = None
 
-        test_loss_min = np.inf
+        j_max = 0
         for epoch in range(epochs):
 
             print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
@@ -399,12 +400,12 @@ class UNet2D(nn.Module):
 
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
-                test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
-                                            write_images=True, device=device)
+                j = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
+                                    write_images=True, device=device)
 
-                # and save model if lower test loss is found
-                if test_loss < test_loss_min:
-                    test_loss_min = test_loss
+                # and save model if higher segmentation performance was obtained
+                if j > j_max:
+                    j_max = j
                     torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
 
             # save model every epoch
@@ -720,6 +721,9 @@ class UNet3D(nn.Module):
         y_preds = np.asarray(y_preds)
         ys = np.asarray(ys)
         w = (1 - np.asarray(ys_)).astype(bool)
+        js = [jaccard((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in range(1, len(self.coi))]
+        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, self.coi[i], ...], w=w) for i in
+               range(1, len(self.coi))]
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -733,13 +737,11 @@ class UNet3D(nn.Module):
             log_scalars([loss_avg], ['test/' + s for s in ['loss-seg']], writer, epoch=epoch)
             for i, c in enumerate(self.coi):
                 if not i == 0:  # skip background class
-                    j = jaccard((ys == i).astype(int), y_preds[:, c, ...], w=w)
-                    a, ba, p, r, f = accuracy_metrics((ys == i).astype(int), y_preds[:, c, ...], w=w)
-                    log_scalars([j, a, ba, p, r, f], ['test/' + s for s in
-                                                      ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
-                                                       'balanced-accuracy_class_%d)' % (c), 'precision_class_%d)' % (c),
-                                                       'recall_class_%d)' % (c), 'f-score_class_%d)' % (c)]], writer,
-                                epoch=epoch)
+                    log_scalars([js[i - 1], *(ams[i - 1])], ['test/' + s for s in
+                                                             ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
+                                                              'balanced-accuracy_class_%d)' % (c),
+                                                              'precision_class_%d)' % (c), 'recall_class_%d)' % (c),
+                                                              'f-score_class_%d)' % (c)]], writer, epoch=epoch)
 
             # log images if necessary
             if write_images:
@@ -753,7 +755,7 @@ class UNet3D(nn.Module):
                                       ['test/' + s for s in ['y_class_%d)' % (c), 'y_pred_class_%d)' % (c)]], writer,
                                       epoch=epoch)
 
-        return loss_avg
+        return np.mean(js)
 
     def train_net(self, train_loader, test_loader, loss_fn, optimizer, epochs, scheduler=None, test_freq=1,
                   augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, device=0):
@@ -778,7 +780,7 @@ class UNet3D(nn.Module):
         else:
             writer = None
 
-        test_loss_min = np.inf
+        j_max = 0
         for epoch in range(epochs):
 
             print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
@@ -797,12 +799,12 @@ class UNet3D(nn.Module):
 
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
-                test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
+                j = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
                                             write_images=True, device=device)
 
-                # and save model if lower test loss is found
-                if test_loss < test_loss_min:
-                    test_loss_min = test_loss
+                # and save model if higher segmentation performance was obtained
+                if j > j_max:
+                    j_max = j
                     torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
 
             # save model every epoch
