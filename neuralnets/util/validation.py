@@ -103,7 +103,7 @@ def _pad(data, input_shape):
 def _crop(data, seg_cum, counts_cum, pad_width):
     return data[:, pad_width[1][0]:data.shape[1] - pad_width[1][1], pad_width[2][0]:data.shape[2] - pad_width[2][1],
            pad_width[3][0]:data.shape[3] - pad_width[3][1]], \
-           seg_cum[pad_width[1][0]:data.shape[1] - pad_width[1][1], pad_width[2][0]:data.shape[2] - pad_width[2][1],
+           seg_cum[:, pad_width[1][0]:data.shape[1] - pad_width[1][1], pad_width[2][0]:data.shape[2] - pad_width[2][1],
            pad_width[3][0]:data.shape[3] - pad_width[3][1]], \
            counts_cum[pad_width[1][0]:data.shape[1] - pad_width[1][1], pad_width[2][0]:data.shape[2] - pad_width[2][1],
            pad_width[3][0]:data.shape[3] - pad_width[3][1]]
@@ -122,12 +122,12 @@ def _cumulate_segmentation(seg_cum, counts_cum, outputs, g_window, positions, ba
         (z_b, y_b, x_b) = positions[b, :]
         # take into account the gaussian filtering
         if is2d:
-            seg_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += \
-                np.multiply(g_window, outputs.data.cpu().numpy()[b, 1:2, :, :])
+            seg_cum[:, z_b, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += \
+                np.multiply(g_window, outputs.data.cpu().numpy()[b, ...])
             counts_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += g_window
         else:
-            seg_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += \
-                np.multiply(g_window, outputs.data.cpu().numpy()[b, 1, ...])
+            seg_cum[:, z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += \
+                np.multiply(g_window, outputs.data.cpu().numpy()[b, ...])
             counts_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += g_window
 
 
@@ -181,7 +181,7 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
     g_window = _init_gaussian_window(input_shape, is2d)
 
     # allocate space
-    seg_cum = np.zeros(data.shape[1:])
+    seg_cum = np.zeros((net.out_channels, *data.shape[1:]))
     counts_cum = np.zeros(data.shape[1:])
 
     # define sliding window
@@ -213,9 +213,10 @@ def segment_multichannel(data, net, input_shape, batch_size=1, step_size=None, t
 
     # crop out the symmetric extension and compute segmentation
     data, seg_cum, counts_cum = _crop(data, seg_cum, counts_cum, pad_width)
-    segmentation = np.divide(seg_cum, counts_cum)
+    for c in range(net.out_channels):
+        seg_cum[c, ...] = np.divide(seg_cum[c, ...], counts_cum)
 
-    return segmentation
+    return seg_cum
 
 
 def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False, device=0):
@@ -237,7 +238,7 @@ def segment(data, net, input_shape, batch_size=1, step_size=None, train=False, t
                                 train=train, track_progress=track_progress, device=device)
 
 
-def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, write_dir=None, val_file=None,
+def validate(net, data, labels, input_size, classes_of_interest=(0, 1), batch_size=1, write_dir=None, val_file=None,
              writer=None, epoch=0, track_progress=False, device=0):
     """
     Validate a network on a dataset and its labels
@@ -246,7 +247,7 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
     :param data: 3D array (Z, Y, X) representing the 3D image
     :param labels: 3D array (Z, Y, X) representing the 3D labels
     :param input_size: size of the inputs (either 2 or 3-tuple) for processing
-    :param label_of_interest: index of the label of interest
+    :param classes_of_interest: index of the label of interest
     :param batch_size: batch size for processing
     :param write_dir: optionally, specify a directory to write the output
     :param val_file: optionally, specify a file to write the validation results
@@ -266,37 +267,44 @@ def validate(net, data, labels, input_size, label_of_interest=1, batch_size=1, w
     segmentation = segment(data, net, input_size, batch_size=batch_size, track_progress=track_progress, device=device)
 
     # compute metrics
-    labels_interest = (labels == label_of_interest).astype('float')
-    j = jaccard(segmentation, labels_interest, w=labels != 255)
-    a, ba, p, r, f = accuracy_metrics(segmentation, labels_interest, w=labels != 255)
-    if np.sum(labels == 255) > 0:
-        h = -1
-    else:
-        h = hausdorff_distance(segmentation, labels)[0]
-
-    # report results
-    print('[%s] Validation performance: ' % (datetime.datetime.now()))
-    print('[%s]     - Accuracy: %f' % (datetime.datetime.now(), a))
-    print('[%s]     - Balanced accuracy: %f' % (datetime.datetime.now(), ba))
-    print('[%s]     - Precision: %f' % (datetime.datetime.now(), p))
-    print('[%s]     - Recall: %f' % (datetime.datetime.now(), r))
-    print('[%s]     - F1 score: %f' % (datetime.datetime.now(), f))
-    print('[%s]     - Jaccard index: %f' % (datetime.datetime.now(), j))
-    print('[%s]     - Hausdorff distance: %f' % (datetime.datetime.now(), h))
-
-    # write stuff if necessary
-    if write_dir is not None:
-        print('[%s] Writing the output' % (datetime.datetime.now()))
-        write_volume(255 * segmentation, write_dir, type='pngseq')
-    if writer is not None:
-        z = data.shape[0] // 2
-        N = 1024
-        if data.shape[1] > N:
-            writer.add_image('val/input', data[z:z + 1, :N, :N], epoch)
-            writer.add_image('val/segmentation', segmentation[z:z + 1, :N, :N], epoch)
+    w = labels != 255
+    comp_hausdorff = np.sum(labels == 255) == 0
+    js = [jaccard(segmentation[i], (labels == classes_of_interest[i]).astype('float'), w=w) for i in
+          range(1, len(classes_of_interest))]
+    ams = [accuracy_metrics(segmentation[i], (labels == classes_of_interest[i]).astype('float'), w=w) for i in
+           range(1, len(classes_of_interest))]
+    for i in range(1, len(classes_of_interest)):
+        if comp_hausdorff:
+            h = hausdorff_distance(segmentation[i], labels)[0]
         else:
-            writer.add_image('val/input', data[z:z + 1, ...], epoch)
-            writer.add_image('val/segmentation', segmentation[z:z + 1, ...], epoch)
+            h = -1
+
+        # report results
+        print('[%s] Validation performance for class %d: ' % (datetime.datetime.now(), i))
+        print('[%s]     - Accuracy: %f' % (datetime.datetime.now(), ams[i - 1][0]))
+        print('[%s]     - Balanced accuracy: %f' % (datetime.datetime.now(), ams[i - 1][1]))
+        print('[%s]     - Precision: %f' % (datetime.datetime.now(), ams[i - 1][2]))
+        print('[%s]     - Recall: %f' % (datetime.datetime.now(), ams[i - 1][3]))
+        print('[%s]     - F1 score: %f' % (datetime.datetime.now(), ams[i - 1][4]))
+        print('[%s]     - Jaccard index: %f' % (datetime.datetime.now(), js[i - 1]))
+        print('[%s]     - Hausdorff distance: %f' % (datetime.datetime.now(), h))
+
+        # write stuff if necessary
+        if write_dir is not None:
+            print('[%s] Writing the output for class %d: ' % (datetime.datetime.now(), i))
+            wdir = os.path.join(write_dir, 'class_' + str(i))
+            if not os.path.exists(wdir):
+                os.mkdir(wdir)
+                write_volume(255 * segmentation[i], wdir, type='pngseq')
+        if writer is not None:
+            z = data.shape[0] // 2
+            N = 1024
+            if data.shape[1] > N:
+                writer.add_image('val/input', data[z:z + 1, :N, :N], epoch)
+                writer.add_image('val/segmentation', segmentation[z:z + 1, :N, :N], epoch)
+            else:
+                writer.add_image('val/input', data[z:z + 1, ...], epoch)
+                writer.add_image('val/segmentation', segmentation[z:z + 1, ...], epoch)
     if val_file is not None:
-        np.save(val_file, np.asarray([a, p, r, f, j, h]))
-    return a, ba, p, r, f, j, h
+        np.save(val_file, np.concatenate((np.asarray(js)[:, np.newaxis], np.asarray(ams)), axis=1))
+    return js, ams
