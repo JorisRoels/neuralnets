@@ -280,7 +280,7 @@ def validate(net, data, labels, input_size, classes_of_interest=(0, 1), batch_si
             h = -1
 
         # report results
-        print('[%s] Validation performance for class %d: ' % (datetime.datetime.now(), i))
+        print('[%s] Validation performance for class %d: ' % (datetime.datetime.now(), classes_of_interest[i]))
         print('[%s]     - Accuracy: %f' % (datetime.datetime.now(), ams[i - 1][0]))
         print('[%s]     - Balanced accuracy: %f' % (datetime.datetime.now(), ams[i - 1][1]))
         print('[%s]     - Precision: %f' % (datetime.datetime.now(), ams[i - 1][2]))
@@ -291,7 +291,7 @@ def validate(net, data, labels, input_size, classes_of_interest=(0, 1), batch_si
 
         # write stuff if necessary
         if write_dir is not None:
-            print('[%s] Writing the output for class %d: ' % (datetime.datetime.now(), i))
+            print('[%s] Writing the output for class %d: ' % (datetime.datetime.now(), classes_of_interest[i]))
             wdir = os.path.join(write_dir, 'class_' + str(i))
             if not os.path.exists(wdir):
                 os.mkdir(wdir)
