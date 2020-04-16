@@ -84,7 +84,8 @@ class StronglyLabeledStandardDataset(StandardDataset):
             # add channel axis if the data is 3D
             input, target = input[np.newaxis, ...], target[np.newaxis, ...]
 
-        if len(np.intersect1d(np.unique(target), self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(np.unique(target),
+                              self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             return self.__getitem__(i)
         else:
             return input, target
@@ -169,13 +170,17 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional coi: list or sequence of the classes of interest
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     """
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1)):
+    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1),
+                 in_channels=1):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
 
         self.label_path = label_path
         self.coi = coi
+        self.in_channels = in_channels
 
         # load labels
         self.labels = read_volume(label_path, type=type)
@@ -183,22 +188,25 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
         # rescale the dataset if necessary
         if scaling is not None:
             target_size = np.asarray(np.multiply(self.labels.shape, scaling), dtype=int)
-            self.labels = \
-                F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
-                              mode='area')[0, 0, ...].numpy()
+            self.labels = F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
+                                        mode='area')[0, 0, ...].numpy()
 
         self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
         # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
+        if self.input_shape[0] == 1 and self.in_channels > 1:  # select multiple slices
+            input, target = sample_labeled_input(self.data, self.labels, [self.in_channels, *self.input_shape[1:]])
+        else:
+            input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
 
-        if input.shape[0] > 1:
+        if self.input_shape[0] > 1:
             # add channel axis if the data is 3D
             input, target = input[np.newaxis, ...], target[np.newaxis, ...]
 
-        if len(np.intersect1d(np.unique(target), self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(np.unique(target),
+                              self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             return self.__getitem__(i)
         else:
             return input, target
@@ -300,15 +308,18 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional len_epoch: number of iterations for one epoch
     :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
+    :param optional coi: list or sequence of the classes of interest
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
-                 sampling_mode='uniform', coi=(0, 1)):
+                 sampling_mode='uniform', coi=(0, 1), in_channels=1):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
                          sampling_mode=sampling_mode)
 
         self.label_path = label_path
         self.coi = coi
+        self.in_channels = in_channels
 
         # load the data
         self.labels = []
@@ -318,9 +329,8 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
             # rescale the dataset if necessary
             if scaling is not None:
                 target_size = np.asarray(np.multiply(labels.shape, scaling[k]), dtype=int)
-                labels = \
-                    F.interpolate(torch.Tensor(labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
-                                  mode='area')[0, 0, ...].numpy()
+                labels = F.interpolate(torch.Tensor(labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
+                                       mode='area')[0, 0, ...].numpy()
 
             self.labels.append(labels)
 
@@ -335,13 +345,17 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
             k = np.random.choice(len(self.data), p=self.data_sizes)
 
         # get random sample
-        input, target = sample_labeled_input(self.data[k], self.labels[k], self.input_shape)
+        if self.input_shape[0] == 1 and self.in_channels > 1:  # select multiple slices
+            input, target = sample_labeled_input(self.data[k], self.labels[k], [self.in_channels, *self.input_shape[1:]])
+        else:
+            input, target = sample_labeled_input(self.data[k], self.labels[k], self.input_shape)
 
-        if input.shape[0] > 1:
+        if self.input_shape[0] > 1:
             # add channel axis if the data is 3D
             input, target = input[np.newaxis, ...], target[np.newaxis, ...]
 
-        if len(np.intersect1d(np.unique(target), self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(np.unique(target),
+                              self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             return self.__getitem__(i)
         else:
             return input, target

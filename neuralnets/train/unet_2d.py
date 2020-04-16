@@ -43,6 +43,8 @@ parser.add_argument("--levels", help="Number of levels in the segmentation U-Net
 parser.add_argument("--dropout", help="Dropout", type=float, default=0.0)
 parser.add_argument("--norm", help="Normalization in the network (batch or instance)", type=str, default="instance")
 parser.add_argument("--activation", help="Non-linear activations in the network", type=str, default="relu")
+parser.add_argument("--in_channels", help="Amount of subsequent slices that serve as input (should be odd)", type=int,
+                    default=1)
 parser.add_argument("--classes_of_interest", help="List of indices that correspond to the classes of interest",
                     type=str, default="0,1,2")
 
@@ -89,10 +91,12 @@ augmenter = Compose([ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0
                      AddNoise(sigma_max=0.05, include_segmentation=True)])
 train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EMBL/train'),
                                      os.path.join(args.data_dir, 'EM/EMBL/train_labels'),
-                                     input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq')
+                                     input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq',
+                                     in_channels=args.in_channels)
 test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EMBL/test'),
                                     os.path.join(args.data_dir, 'EM/EMBL/test_labels'),
-                                    input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq')
+                                    input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq',
+                                    in_channels=args.in_channels)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.train_batch_size)
 
@@ -100,8 +104,8 @@ test_loader = DataLoader(test, batch_size=args.train_batch_size)
     Build the network
 """
 print('[%s] Building the network' % (datetime.datetime.now()))
-net = UNet2D(feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout, dropout_dec=args.dropout,
-             norm=args.norm, activation=args.activation, coi=args.classes_of_interest)
+net = UNet2D(in_channels=args.in_channels, feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout,
+             dropout_dec=args.dropout, norm=args.norm, activation=args.activation, coi=args.classes_of_interest)
 
 """
     Setup optimization for training

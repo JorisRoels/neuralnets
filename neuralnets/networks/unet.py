@@ -140,7 +140,7 @@ class UNet2D(nn.Module):
     """
     2D U-Net
 
-    :param optional in_channels: number of input channels
+    :param optional in_channels: number of input channels, should be odd
     :param optional coi: indices that correspond to the classes of interest
     :param optional feature_maps: number of initial feature maps
     :param optional levels: levels of the encoder
@@ -156,6 +156,7 @@ class UNet2D(nn.Module):
         super(UNet2D, self).__init__()
 
         self.in_channels = in_channels
+        self.c = in_channels // 2
         self.coi = coi
         self.out_channels = len(coi)
         self.feature_maps = feature_maps
@@ -219,13 +220,14 @@ class UNet2D(nn.Module):
 
             # perform augmentation and transform to appropriate type
             x, _, y, y_ = augment_samples(data, augmenter=augmenter)
-            while (1 - y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
+            while (1 - y_[:, self.c:self.c + 1,
+                       ...]).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
                 x, _, y, y_ = augment_samples(data, augmenter=augmenter)
-            y = y.round().long()
+            y = y[:, self.c:self.c + 1, ...].round().long()
             # clean labels if necessary (due to augmentations)
             if len(self.coi) > 2:
                 y = clean_labels(y, len(self.coi))
-            y_ = y_.bool()
+            y_ = y_[:, self.c:self.c + 1, ...].bool()
 
             # zero the gradient buffers
             self.zero_grad()
@@ -261,7 +263,7 @@ class UNet2D(nn.Module):
 
             # log images if necessary
             if write_images:
-                log_images_2d([x], ['train/' + s for s in ['x']], writer, epoch=epoch)
+                log_images_2d([x[:, self.c:self.c + 1, ...]], ['train/' + s for s in ['x']], writer, epoch=epoch)
                 y_pred = F.softmax(y_pred, dim=1)
                 for i, c in enumerate(self.coi):
                     if not i == 0:  # skip background class
@@ -302,8 +304,8 @@ class UNet2D(nn.Module):
             x, y = tensor_to_device(data, device)
             y_ = get_unlabeled(y)
             x = x.float()
-            y = get_labels(y, coi=self.coi, dtype=int)
-            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
+            y = get_labels(y, coi=self.coi, dtype=int)[:, self.c:self.c + 1, ...]
+            y_ = get_labels(y_, coi=[0, 255], dtype=bool)[:, self.c:self.c + 1, ...]
 
             # forward prop
             y_pred = self(x)
@@ -346,7 +348,7 @@ class UNet2D(nn.Module):
 
             # log images if necessary
             if write_images:
-                log_images_2d([x], ['test/' + s for s in ['x']], writer, epoch=epoch)
+                log_images_2d([x[:, self.c:self.c + 1, ...]], ['test/' + s for s in ['x']], writer, epoch=epoch)
                 y_pred = F.softmax(y_pred, dim=1)
                 for i, c in enumerate(self.coi):
                     if not i == 0:  # skip background class
@@ -800,7 +802,7 @@ class UNet3D(nn.Module):
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
                 j = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
-                                            write_images=True, device=device)
+                                    write_images=True, device=device)
 
                 # and save model if higher segmentation performance was obtained
                 if j > j_max:
