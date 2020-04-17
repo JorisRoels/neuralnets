@@ -125,11 +125,11 @@ net.train_net(train_loader, test_loader, loss_fn, optimizer, args.epochs, schedu
     Validate the trained network
 """
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-         write_dir=os.path.join(args.log_dir, 'segmentation_final'),
-         val_file=os.path.join(args.log_dir, 'validation_final.npy'))
+         write_dir=os.path.join(args.log_dir, 'segmentation_final'), classes_of_interest=args.classes_of_interest,
+         val_file=os.path.join(args.log_dir, 'validation_final.npy'), in_channels=args.in_channels)
 net = torch.load(os.path.join(args.log_dir, 'best_checkpoint.pytorch'))
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-         write_dir=os.path.join(args.log_dir, 'segmentation_best'),
-         val_file=os.path.join(args.log_dir, 'validation_best.npy'))
+         write_dir=os.path.join(args.log_dir, 'segmentation_best'), classes_of_interest=args.classes_of_interest,
+         val_file=os.path.join(args.log_dir, 'validation_best.npy'), in_channels=args.in_channels)
 
 print('[%s] Finished!' % (datetime.datetime.now()))

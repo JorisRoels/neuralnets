@@ -54,7 +54,7 @@ parser.add_argument("--lr", help="Learning rate of the optimization", type=float
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay",
                     type=int, default=10)
 parser.add_argument("--gamma", help="Learning rate decay factor", type=float, default=0.9)
-parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=200)
+parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=1)
 parser.add_argument("--len_epoch", help="Number of iteration in each epoch", type=int, default=100)
 parser.add_argument("--test_freq", help="Number of epochs between each test stage", type=int, default=1)
 parser.add_argument("--train_batch_size", help="Batch size in the training stage", type=int, default=1)
@@ -120,11 +120,11 @@ net.train_net(train_loader, test_loader, loss_fn, optimizer, args.epochs, schedu
     Validate the trained network
 """
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-         write_dir=os.path.join(args.log_dir, 'segmentation_final'),
+         write_dir=os.path.join(args.log_dir, 'segmentation_final'), classes_of_interest=args.classes_of_interest,
          val_file=os.path.join(args.log_dir, 'validation_final.npy'))
 net = torch.load(os.path.join(args.log_dir, 'best_checkpoint.pytorch'))
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
-         write_dir=os.path.join(args.log_dir, 'segmentation_best'),
+         write_dir=os.path.join(args.log_dir, 'segmentation_best'), classes_of_interest=args.classes_of_interest,
          val_file=os.path.join(args.log_dir, 'validation_best.npy'))
 
 print('[%s] Finished!' % (datetime.datetime.now()))
