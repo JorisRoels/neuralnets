@@ -87,6 +87,26 @@ def _init_sliding_window(data, step_size, input_shape, in_channels, is2d, track_
     return sw
 
 
+def _orient(data, orientation=0):
+    """
+    This function essentially places the desired orientation axis to that of the original Z-axis
+    For example:
+          (C, Z, Y, X) -> (C, Y, Z, X) for orientation=1
+          (C, Z, Y, X) -> (C, X, Y, Z) for orientation=2
+    Note that applying this function twice corresponds to the identity transform
+
+    :param data: assumed to be of shape (C, Z, Y, X)
+    :param orientation: 0, 1 or 2 (respectively for Z, Y or X axis)
+    :return: reoriented dataset
+    """
+    if orientation == 1:
+        return np.transpose(data, axes=(0, 2, 1, 3))
+    elif orientation == 2:
+        return np.transpose(data, axes=(0, 3, 2, 1))
+    else:
+        return data
+
+
 def _pad(data, input_shape, in_channels):
     # pad data if input shape is larger than data
     in_shape = input_shape if len(input_shape) == 3 else (1, input_shape[0], input_shape[1])
@@ -152,7 +172,7 @@ def _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions,
 
 
 def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False,
-                         track_progress=False, device=0):
+                         track_progress=False, device=0, orientation=0):
     """
     Segment a multichannel 3D image using a specific network
 
@@ -165,6 +185,7 @@ def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, st
     :param train: evaluate the network in training mode
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
+    :param orientation: orientation to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
     :return: the segmented image
     """
 
@@ -176,6 +197,9 @@ def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, st
         net.train()
     else:
         net.eval()
+
+    # orient data if necessary
+    data = _orient(data, orientation)
 
     # pad data if necessary
     data, pad_width = _pad(data, input_shape, in_channels)
@@ -232,32 +256,38 @@ def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, st
     for c in range(net.out_channels):
         seg_cum[c, ...] = np.divide(seg_cum[c, ...], counts_cum)
 
+    # reorient data to its original orientation
+    data = _orient(data, orientation)
+    seg_cum = _orient(seg_cum, orientation)
+
     return seg_cum
 
 
 def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
-            device=0):
+            device=0, orientation=0):
     """
     Segment a 3D image using a specific network
 
     :param data: 3D array (Z, Y, X) representing the 3D image
     :param net: image-to-image segmentation network
-    :param input_shape: size of the inputs (either 2 or 3-tuple)
+    :param input_shape: size of
     :param in_channels: Amount of subsequent slices that serve as input for the network (should be odd)
     :param batch_size: batch size for processing
     :param step_size: step size of the sliding window
     :param train: evaluate the network in training mode
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
+    :param orientation: orientation to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
     :return: the segmented image
     """
 
     return segment_multichannel(data[np.newaxis, ...], net, input_shape, in_channels=in_channels, batch_size=batch_size,
-                                step_size=step_size, train=train, track_progress=track_progress, device=device)
+                                step_size=step_size, train=train, track_progress=track_progress, device=device,
+                                orientation=orientation)
 
 
 def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(0, 1), batch_size=1, write_dir=None,
-             val_file=None, writer=None, epoch=0, track_progress=False, device=0):
+             val_file=None, writer=None, epoch=0, track_progress=False, device=0, orientations=(0, )):
     """
     Validate a network on a dataset and its labels
 
@@ -274,6 +304,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :param epoch: optionally, current epoch for logging to tensorboard
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
+    :param orientations: list of orientations to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
@@ -282,9 +313,12 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     if write_dir is not None and not os.path.exists(write_dir):
         os.mkdir(write_dir)
 
-    # compute segmentation
-    segmentation = segment(data, net, input_size, in_channels=in_channels, batch_size=batch_size,
-                           track_progress=track_progress, device=device)
+    # compute segmentation for each orientation and average results
+    segmentation = np.zeros((net.out_channels, *data.shape))
+    for orientation in orientations:
+        segmentation += segment(data, net, input_size, in_channels=in_channels, batch_size=batch_size,
+                                track_progress=track_progress, device=device, orientation=orientation)
+    segmentation = segmentation / len(orientations)
 
     # compute metrics
     w = labels != 255
