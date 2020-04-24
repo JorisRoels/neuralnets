@@ -363,6 +363,7 @@ class MultiVolumeDataset(data.Dataset):
         self.in_channels = in_channels
         self.orientations = orientations
         self.orientation = 0
+        self.k = 0
         self.batch_size = batch_size
 
         # load the data
@@ -404,6 +405,12 @@ class MultiVolumeDataset(data.Dataset):
 
     def _select_orientation(self):
         self.orientation = np.random.choice(self.orientations)
+
+    def _select_dataset(self):
+        if self.sampling_mode == 'uniform':
+            self.k = np.random.randint(0, len(self.data))
+        else:
+            self.k = np.random.choice(len(self.data), p=self.data_sizes)
 
 
 class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
@@ -449,22 +456,17 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
     def __getitem__(self, i):
 
-        # select dataset
-        if self.sampling_mode == 'uniform':
-            k = np.random.randint(0, len(self.data))
-        else:
-            k = np.random.choice(len(self.data), p=self.data_sizes)
-
         # reorient when we start a new batch
         if i % self.batch_size == 0:
+            self._select_dataset()
             self._select_orientation()
 
         # get shape of sample
-        input_shape = _validate_shape(self.input_shape, self.data[k].shape, in_channels=self.in_channels,
+        input_shape = _validate_shape(self.input_shape, self.data[self.k].shape, in_channels=self.in_channels,
                                       orientation=self.orientation)
 
         # get random sample
-        input, target = sample_labeled_input(self.data[k], self.labels[k], input_shape)
+        input, target = sample_labeled_input(self.data[self.k], self.labels[self.k], input_shape)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
@@ -506,22 +508,17 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
 
     def __getitem__(self, i):
 
-        # select dataset
-        if self.sampling_mode == 'uniform':
-            k = np.random.randint(0, len(self.data))
-        else:
-            k = np.random.choice(len(self.data), p=self.data_sizes)
-
         # reorient when we start a new batch
         if i % self.batch_size == 0:
+            self._select_dataset()
             self._select_orientation()
 
         # get shape of sample
-        input_shape = _validate_shape(self.input_shape, self.data[k].shape, in_channels=self.in_channels,
+        input_shape = _validate_shape(self.input_shape, self.data[self.k].shape, in_channels=self.in_channels,
                                       orientation=self.orientation)
 
         # get random sample
-        input = sample_unlabeled_input(self.data[k], input_shape)
+        input = sample_unlabeled_input(self.data[self.k], input_shape)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
