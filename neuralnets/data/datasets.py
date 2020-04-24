@@ -42,6 +42,9 @@ def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, level
     :return: the validated input shape
     """
 
+    # make sure input shape can be edited
+    input_shape = list(input_shape)
+
     # sample adjacent slices if necessary
     is2d = input_shape[0] == 1
     if is2d and in_channels > 1:
@@ -60,6 +63,7 @@ def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, level
             # note we assume that the data has a least in_channels elements in each dimension
             input_shape[d] = int((data_shape[d] // (2 ** levels)) * (2 ** levels))
 
+    # and return as a tuple
     return tuple(input_shape)
 
 
