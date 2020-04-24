@@ -182,14 +182,18 @@ class VolumeDataset(data.Dataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
+    :param optional batch_size: size of the sampling batch
     """
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d', orientations=(0,), batch_size=1):
+    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d', in_channels=1,
+                 orientations=(0,), batch_size=1):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
         self.len_epoch = len_epoch
+        self.in_channels = in_channels
         self.orientations = orientations
         self.orientation = 0
         self.batch_size = batch_size
@@ -236,16 +240,16 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
     :param optional coi: list or sequence of the classes of interest
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
+    :param optional batch_size: size of the sampling batch
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
-                         orientations=orientations, batch_size=batch_size)
+                         in_channels=in_channels, orientations=orientations, batch_size=batch_size)
 
         self.label_path = label_path
         self.coi = coi
-        self.in_channels = in_channels
 
         # load labels
         self.labels = read_volume(label_path, type=type)
@@ -295,19 +299,33 @@ class UnlabeledVolumeDataset(VolumeDataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
+    :param optional batch_size: size of the sampling batch
     """
 
-    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', orientations=(0,)):
+    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', in_channels=1,
+                 orientations=(0,), batch_size=1):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
-                         orientations=orientations)
+                         in_channels=in_channels, orientations=orientations, batch_size=batch_size)
 
         self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
+        # reorient when we start a new batch
+        if i % self.batch_size == 0:
+            self._select_orientation()
+
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data.shape, in_channels=self.in_channels,
+                                      orientation=self.orientation)
+
         # get random sample
-        input = sample_unlabeled_input(self.data, self.input_shape)
+        input = sample_unlabeled_input(self.data, input_shape)
+
+        # reorient sample
+        input = _orient(input, orientation=self.orientation)
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
@@ -325,18 +343,23 @@ class MultiVolumeDataset(data.Dataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
     :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
     :param optional orientations: list of orientations for sampling
+    :param optional batch_size: size of the sampling batch
     """
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform',
-                 orientations=(0,)):
+                 in_channels=1, orientations=(0,), batch_size=1):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
         self.len_epoch = len_epoch
         self.sampling_mode = sampling_mode
+        self.in_channels = in_channels
         self.orientations = orientations
+        self.orientation = 0
+        self.batch_size = batch_size
 
         # load the data
         self.data = []
@@ -375,6 +398,9 @@ class MultiVolumeDataset(data.Dataset):
 
         return mu, std
 
+    def _select_orientation(self):
+        self.orientation = np.random.choice(self.orientations)
+
 
 class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     """
@@ -390,16 +416,17 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional coi: list or sequence of the classes of interest
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
+    :param optional batch_size: size of the sampling batch
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
-                 sampling_mode='uniform', coi=(0, 1), in_channels=1, orientations=(0,)):
+                 sampling_mode='uniform', coi=(0, 1), in_channels=1, orientations=(0,), batch_size=1):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
-                         sampling_mode=sampling_mode, orientations=orientations)
+                         sampling_mode=sampling_mode, in_channels=in_channels, orientations=orientations,
+                         batch_size=batch_size)
 
         self.label_path = label_path
         self.coi = coi
-        self.in_channels = in_channels
 
         # load the data
         self.labels = []
@@ -424,12 +451,20 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
         else:
             k = np.random.choice(len(self.data), p=self.data_sizes)
 
+        # reorient when we start a new batch
+        if i % self.batch_size == 0:
+            self._select_orientation()
+
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data[k].shape, in_channels=self.in_channels,
+                                      orientation=self.orientation)
+
         # get random sample
-        if self.input_shape[0] == 1 and self.in_channels > 1:  # select multiple slices
-            input, target = sample_labeled_input(self.data[k], self.labels[k],
-                                                 [self.in_channels, *self.input_shape[1:]])
-        else:
-            input, target = sample_labeled_input(self.data[k], self.labels[k], self.input_shape)
+        input, target = sample_labeled_input(self.data[k], self.labels[k], input_shape)
+
+        # reorient sample
+        input = _orient(input, orientation=self.orientation)
+        target = _orient(target, orientation=self.orientation)
 
         if self.input_shape[0] > 1:
             # add channel axis if the data is 3D
@@ -451,14 +486,17 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
     :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
     :param optional orientations: list of orientations for sampling
+    :param optional batch_size: size of the sampling batch
     """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d',
-                 sampling_mode='uniform', orientations=(0,)):
+                 sampling_mode='uniform', in_channels=1, orientations=(0,), batch_size=1):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
-                         sampling_mode=sampling_mode, orientations=orientations)
+                         sampling_mode=sampling_mode, in_channels=in_channels, orientations=orientations,
+                         batch_size=batch_size)
 
         self.mu, self.std = self._get_stats()
 
@@ -470,8 +508,19 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
         else:
             k = np.random.choice(len(self.data), p=self.data_sizes)
 
+        # reorient when we start a new batch
+        if i % self.batch_size == 0:
+            self._select_orientation()
+
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data[k].shape, in_channels=self.in_channels,
+                                      orientation=self.orientation)
+
         # get random sample
-        input = sample_unlabeled_input(self.data[k], self.input_shape)
+        input = sample_unlabeled_input(self.data[k], input_shape)
+
+        # reorient sample
+        input = _orient(input, orientation=self.orientation)
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
