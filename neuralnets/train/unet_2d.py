@@ -47,6 +47,7 @@ parser.add_argument("--in_channels", help="Amount of subsequent slices that serv
                     default=1)
 parser.add_argument("--classes_of_interest", help="List of indices that correspond to the classes of interest",
                     type=str, default="0,1,2")
+parser.add_argument("--orientations", help="Orientations to consider for training", type=str, default="0")
 
 # optimization parameters
 parser.add_argument("--loss", help="Specifies the loss function (and optionally, additional parameters separated by "
@@ -65,6 +66,7 @@ parser.add_argument("--test_batch_size", help="Batch size in the testing stage",
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
 args.classes_of_interest = [int(c) for c in args.classes_of_interest.split(',')]
+args.orientations = [int(c) for c in args.orientations.split(',')]
 loss_fn = get_loss_function(args.loss)
 
 """
@@ -92,13 +94,15 @@ augmenter = Compose([ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0
 train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EMBL/train'),
                                      os.path.join(args.data_dir, 'EM/EMBL/train_labels'),
                                      input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq',
-                                     in_channels=args.in_channels)
+                                     in_channels=args.in_channels, batch_size=args.train_batch_size,
+                                     orientations=args.orientations)
 test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EMBL/test'),
                                     os.path.join(args.data_dir, 'EM/EMBL/test_labels'),
                                     input_shape=input_shape, len_epoch=args.len_epoch, type='pngseq',
-                                    in_channels=args.in_channels)
+                                    in_channels=args.in_channels, batch_size=args.test_batch_size,
+                                    orientations=args.orientations)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
-test_loader = DataLoader(test, batch_size=args.train_batch_size)
+test_loader = DataLoader(test, batch_size=args.test_batch_size)
 
 """
     Build the network

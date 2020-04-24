@@ -7,6 +7,62 @@ from neuralnets.util.io import read_volume
 from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input
 
 
+def _orient(data, orientation=0):
+    """
+    This function essentially places the desired orientation axis to that of the original Z-axis
+    For example:
+          (Z, Y, X) -> (Y, Z, X) for orientation=1
+          (Z, Y, X) -> (X, Y, Z) for orientation=2
+    Note that applying this function twice corresponds to the identity transform
+
+    :param data: assumed to be of shape (Z, Y, X)
+    :param orientation: 0, 1 or 2 (respectively for Z, Y or X axis)
+    :return: reoriented data sample
+    """
+    if orientation == 1:
+        return np.transpose(data, axes=(1, 0, 2))
+    elif orientation == 2:
+        return np.transpose(data, axes=(2, 1, 0))
+    else:
+        return data
+
+
+def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, levels=4):
+    """
+    Validates an input for propagation through a U-Net by taking into account the following:
+        - Sampling along different orientations
+        - Sampling multiple adjacent slices as channels
+        - Maximum size that can be sampled from the data
+
+    :param input_shape: original shape of the sample (Z, Y, X)
+    :param data_shape: shape of the data to sample from (Z, Y, X)
+    :param orientation: orientation to sample along
+    :param in_channels: sample multiple adjacent slices as channels
+    :param levels: amount of pooling layers in the network
+    :return: the validated input shape
+    """
+
+    # sample adjacent slices if necessary
+    is2d = input_shape[0] == 1
+    if is2d and in_channels > 1:
+        input_shape[0] = in_channels
+
+    # transform the data shape and input shape according to the orientation
+    if orientation == 1:  # (Z, Y, X) -> (Y, Z, X)
+        input_shape = [input_shape[1], input_shape[0], input_shape[2]]
+    elif orientation == 2:  # (Z, Y, X) -> (X, Y, Z)
+        input_shape = [input_shape[2], input_shape[1], input_shape[0]]
+
+    # make sure the input shape fits in the data shape: i.e. find largest k such that n of the form n=k*2**levels
+    for d in range(3):
+        if not (is2d and d == orientation) and input_shape[d] > data_shape[d]:
+            # 2D case: X, Y - 3D case: X, Y, Z
+            # note we assume that the data has a least in_channels elements in each dimension
+            input_shape[d] = int((data_shape[d] // (2 ** levels)) * (2 ** levels))
+
+    return tuple(input_shape)
+
+
 class StandardDataset(data.Dataset):
     """
     Standard dataset of N 2D images
@@ -126,13 +182,17 @@ class VolumeDataset(data.Dataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional orientations: list of orientations for sampling
     """
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d'):
+    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d', orientations=(0,), batch_size=1):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
         self.len_epoch = len_epoch
+        self.orientations = orientations
+        self.orientation = 0
+        self.batch_size = batch_size
 
         # load the data
         self.data = read_volume(data_path, type=type)
@@ -159,6 +219,9 @@ class VolumeDataset(data.Dataset):
 
         return mu, std
 
+    def _select_orientation(self):
+        self.orientation = np.random.choice(self.orientations)
+
 
 class StronglyLabeledVolumeDataset(VolumeDataset):
     """
@@ -172,11 +235,13 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional coi: list or sequence of the classes of interest
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
+    :param optional orientations: list of orientations for sampling
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1),
-                 in_channels=1):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
+                 in_channels=1, orientations=(0,), batch_size=1):
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
+                         orientations=orientations, batch_size=batch_size)
 
         self.label_path = label_path
         self.coi = coi
@@ -195,11 +260,20 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
     def __getitem__(self, i):
 
+        # reorient when we start a new batch
+        if i % self.batch_size == 0:
+            self._select_orientation()
+
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data.shape, in_channels=self.in_channels,
+                                      orientation=self.orientation)
+
         # get random sample
-        if self.input_shape[0] == 1 and self.in_channels > 1:  # select multiple slices
-            input, target = sample_labeled_input(self.data, self.labels, [self.in_channels, *self.input_shape[1:]])
-        else:
-            input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
+        input, target = sample_labeled_input(self.data, self.labels, input_shape)
+
+        # reorient sample
+        input = _orient(input, orientation=self.orientation)
+        target = _orient(target, orientation=self.orientation)
 
         if self.input_shape[0] > 1:
             # add channel axis if the data is 3D
@@ -221,10 +295,12 @@ class UnlabeledVolumeDataset(VolumeDataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional orientations: list of orientations for sampling
     """
 
-    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d'):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type)
+    def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', orientations=(0,)):
+        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
+                         orientations=orientations)
 
         self.mu, self.std = self._get_stats()
 
@@ -250,14 +326,17 @@ class MultiVolumeDataset(data.Dataset):
     :param optional len_epoch: number of iterations for one epoch
     :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
+    :param optional orientations: list of orientations for sampling
     """
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform'):
+    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform',
+                 orientations=(0,)):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
         self.len_epoch = len_epoch
         self.sampling_mode = sampling_mode
+        self.orientations = orientations
 
         # load the data
         self.data = []
@@ -310,12 +389,13 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
     :param optional coi: list or sequence of the classes of interest
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
+    :param optional orientations: list of orientations for sampling
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
-                 sampling_mode='uniform', coi=(0, 1), in_channels=1):
+                 sampling_mode='uniform', coi=(0, 1), in_channels=1, orientations=(0,)):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
-                         sampling_mode=sampling_mode)
+                         sampling_mode=sampling_mode, orientations=orientations)
 
         self.label_path = label_path
         self.coi = coi
@@ -346,7 +426,8 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
         # get random sample
         if self.input_shape[0] == 1 and self.in_channels > 1:  # select multiple slices
-            input, target = sample_labeled_input(self.data[k], self.labels[k], [self.in_channels, *self.input_shape[1:]])
+            input, target = sample_labeled_input(self.data[k], self.labels[k],
+                                                 [self.in_channels, *self.input_shape[1:]])
         else:
             input, target = sample_labeled_input(self.data[k], self.labels[k], self.input_shape)
 
@@ -371,12 +452,13 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional len_epoch: number of iterations for one epoch
     :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
+    :param optional orientations: list of orientations for sampling
     """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d',
-                 sampling_mode='uniform'):
+                 sampling_mode='uniform', orientations=(0,)):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
-                         sampling_mode=sampling_mode)
+                         sampling_mode=sampling_mode, orientations=orientations)
 
         self.mu, self.std = self._get_stats()
 

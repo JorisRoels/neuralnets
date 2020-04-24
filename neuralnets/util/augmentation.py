@@ -455,6 +455,8 @@ class RandomDeformation_2D(object):
 
         if rnd.rand() < self.prob:
             grid = self.grids[rnd.randint(self.n_grids)]
+            if x.size()[2:4] != grid.size()[1:3]:  # reshape grid if necessary
+                grid = F.interpolate(grid.permute(0, 3, 1, 2), x.size()[2:4]).permute(0, 2, 3, 1)
             grid = grid.repeat_interleave(x.size(0), dim=0)
             x_aug = F.grid_sample(x, grid, padding_mode="border")
             if self.include_segmentation:
@@ -529,6 +531,8 @@ class RandomDeformation_3D(object):
 
         if rnd.rand() < self.prob:
             grid = self.grids[rnd.randint(self.n_grids)]
+            if x.size()[3:5] != grid.size()[1:3]:  # reshape grid if necessary
+                grid = F.interpolate(grid.permute(0, 3, 1, 2), x.size()[3:5]).permute(0, 2, 3, 1)
             grid = grid.repeat_interleave(x.size(0) * x.size(2), dim=0)
             x_aug = F.grid_sample(torch.reshape(x, (x.size(0) * x.size(2), x.size(1), x.size(3), x.size(4))), grid,
                                   padding_mode="border")

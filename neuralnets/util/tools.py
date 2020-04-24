@@ -287,6 +287,6 @@ def clean_labels(y, n_classes):
             if not (c == 0 or c == y.shape[1] - 1):
                 mask = binary_opening(y[b, 0, ...] == c)
                 y_b[y_b == c] = 0
-                y_b[mask] = c
+                y_b[torch.Tensor(mask).bool()] = c
         y_clean[b, 0, ...] = y_b
     return y_clean

@@ -295,9 +295,9 @@ class UNet2D(nn.Module):
         cnt = 0
 
         # test loss
-        y_preds = []
-        ys = []
-        ys_ = []
+        y_preds = np.zeros((self.out_channels, 0))
+        ys = np.zeros((0))
+        ys_ = np.zeros((0))
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -316,22 +316,19 @@ class UNet2D(nn.Module):
             cnt += 1
 
             for b in range(y_pred.size(0)):
-                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, ...])
-                ys.append(y[b, 0, ...].cpu().numpy())
-                ys_.append(y_[b, 0, ...].cpu().numpy())
+                y_preds = np.concatenate(
+                    (y_preds, F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy()), axis=1)
+                ys = np.concatenate((ys, y[b, 0, ...].flatten().cpu().numpy()))
+                ys_ = np.concatenate((ys_, y_[b, 0, ...].flatten().cpu().numpy()))
 
         # prep for metric computation
-        y_preds = np.asarray(y_preds)
-        ys = np.asarray(ys)
-        w = (1 - np.asarray(ys_)).astype(bool)
-        js = [jaccard((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in range(1, len(self.coi))]
-        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in
-               range(1, len(self.coi))]
+        w = (1 - ys_).astype(bool)
+        js = [jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
+        ams = [accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average test loss: %.6f'
-              % (datetime.datetime.now(), epoch, loss_avg))
+        print('[%s] Epoch %5d - Average test loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
 
         # log everything
         if writer is not None:
@@ -617,7 +614,7 @@ class UNet3D(nn.Module):
 
             # filter out unlabeled pixels and include them in augmentation
             y_ = get_unlabeled(data[1], dtype=float)
-            data.insert(1, y)
+            data.append(y)
             data.append(y_)
 
             # perform augmentation and transform to appropriate type
@@ -625,6 +622,9 @@ class UNet3D(nn.Module):
             while (1 - y_).sum() == 0:  # make sure labels are not lost in augmentation, otherwise augment new sample
                 x, _, y, y_ = augment_samples(data, augmenter=augmenter)
             y = y.round().long()
+            # clean labels if necessary (due to augmentations)
+            if len(self.coi) > 2:
+                y = clean_labels(y, len(self.coi))
             y_ = y_.bool()
 
             # zero the gradient buffers
@@ -651,8 +651,7 @@ class UNet3D(nn.Module):
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average train loss: %.6f'
-              % (datetime.datetime.now(), epoch, loss_avg))
+        print('[%s] Epoch %5d - Average train loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
 
         # log everything
         if writer is not None:
@@ -694,9 +693,9 @@ class UNet3D(nn.Module):
         cnt = 0
 
         # test loss
-        y_preds = []
-        ys = []
-        ys_ = []
+        y_preds = np.zeros((self.out_channels, 0))
+        ys = np.zeros((0))
+        ys_ = np.zeros((0))
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -704,7 +703,7 @@ class UNet3D(nn.Module):
             y_ = get_unlabeled(y)
             x = x.float()
             y = get_labels(y, coi=self.coi, dtype=int)
-            y_ = get_labels(y_, coi=[0, 255], dtype=int)
+            y_ = get_labels(y_, coi=[0, 255], dtype=bool)
 
             # forward prop
             y_pred = self(x)
@@ -715,22 +714,19 @@ class UNet3D(nn.Module):
             cnt += 1
 
             for b in range(y_pred.size(0)):
-                y_preds.append(F.softmax(y_pred, dim=1).data.cpu().numpy()[b, ...])
-                ys.append(y[b, 0, ...].cpu().numpy())
-                ys_.append(y_[b, 0, ...].cpu().numpy())
+                y_preds = np.concatenate(
+                    (y_preds, F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy()), axis=1)
+                ys = np.concatenate((ys, y[b, 0, ...].flatten().cpu().numpy()))
+                ys_ = np.concatenate((ys_, y_[b, 0, ...].flatten().cpu().numpy()))
 
         # prep for metric computation
-        y_preds = np.asarray(y_preds)
-        ys = np.asarray(ys)
-        w = (1 - np.asarray(ys_)).astype(bool)
-        js = [jaccard((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in range(1, len(self.coi))]
-        ams = [accuracy_metrics((ys == i).astype(int), y_preds[:, i, ...], w=w) for i in
-               range(1, len(self.coi))]
+        w = (1 - ys_).astype(bool)
+        js = [jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
+        ams = [accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average test loss: %.6f'
-              % (datetime.datetime.now(), epoch, loss_avg))
+        print('[%s] Epoch %5d - Average test loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
 
         # log everything
         if writer is not None:

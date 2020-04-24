@@ -44,7 +44,8 @@ parser.add_argument("--dropout", help="Dropout", type=float, default=0.0)
 parser.add_argument("--norm", help="Normalization in the network (batch or instance)", type=str, default="instance")
 parser.add_argument("--activation", help="Non-linear activations in the network", type=str, default="relu")
 parser.add_argument("--classes_of_interest", help="List of indices that correspond to the classes of interest",
-                    type=str, default="0,1,2")
+                    type=str, default="0,1")
+parser.add_argument("--orientations", help="Orientations to consider for training", type=str, default="0,1,2")
 
 # optimization parameters
 parser.add_argument("--loss", help="Specifies the loss function (and optionally, additional parameters separated by "
@@ -54,7 +55,7 @@ parser.add_argument("--lr", help="Learning rate of the optimization", type=float
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay",
                     type=int, default=10)
 parser.add_argument("--gamma", help="Learning rate decay factor", type=float, default=0.9)
-parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=1)
+parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=200)
 parser.add_argument("--len_epoch", help="Number of iteration in each epoch", type=int, default=100)
 parser.add_argument("--test_freq", help="Number of epochs between each test stage", type=int, default=1)
 parser.add_argument("--train_batch_size", help="Batch size in the training stage", type=int, default=1)
@@ -63,6 +64,7 @@ parser.add_argument("--test_batch_size", help="Batch size in the testing stage",
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
 args.classes_of_interest = [int(c) for c in args.classes_of_interest.split(',')]
+args.orientations = [int(c) for c in args.orientations.split(',')]
 loss_fn = get_loss_function(args.loss)
 
 """
@@ -86,12 +88,14 @@ augmenter = Compose([ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0
                      RandomDeformation_3D(args.input_size[1:], grid_size=(64, 64), sigma=0.01, device=args.device,
                                           include_segmentation=True),
                      AddNoise(sigma_max=0.05, include_segmentation=True)])
-train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EMBL/train'),
-                                     os.path.join(args.data_dir, 'EM/EMBL/train_labels'),
-                                     input_shape=args.input_size, len_epoch=args.len_epoch, type='pngseq')
-test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EMBL/test'),
-                                    os.path.join(args.data_dir, 'EM/EMBL/test_labels'),
-                                    input_shape=args.input_size, len_epoch=args.len_epoch, type='pngseq')
+train = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/train'),
+                                     os.path.join(args.data_dir, 'EM/EPFL/train_labels'),
+                                     input_shape=args.input_size, len_epoch=args.len_epoch, type='pngseq',
+                                     orientations=args.orientations)
+test = StronglyLabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/test'),
+                                    os.path.join(args.data_dir, 'EM/EPFL/test_labels'),
+                                    input_shape=args.input_size, len_epoch=args.len_epoch, type='pngseq',
+                                    orientations=args.orientations)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.train_batch_size)
 
