@@ -295,9 +295,9 @@ class UNet2D(nn.Module):
         cnt = 0
 
         # test loss
-        y_preds = np.zeros((self.out_channels, 0))
-        ys = np.zeros((0))
-        ys_ = np.zeros((0))
+        y_preds = []
+        ys = []
+        ys_ = []
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -316,12 +316,14 @@ class UNet2D(nn.Module):
             cnt += 1
 
             for b in range(y_pred.size(0)):
-                y_preds = np.concatenate(
-                    (y_preds, F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy()), axis=1)
-                ys = np.concatenate((ys, y[b, 0, ...].flatten().cpu().numpy()))
-                ys_ = np.concatenate((ys_, y_[b, 0, ...].flatten().cpu().numpy()))
+                y_preds.append(F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy())
+                ys.append(y[b, 0, ...].flatten().cpu().numpy())
+                ys_.append(y_[b, 0, ...].flatten().cpu().numpy())
 
         # prep for metric computation
+        y_preds = np.concatenate(y_preds, axis=1)
+        ys = np.concatenate(ys)
+        ys_ = np.concatenate(ys_)
         w = (1 - ys_).astype(bool)
         js = [jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
         ams = [accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
@@ -693,9 +695,9 @@ class UNet3D(nn.Module):
         cnt = 0
 
         # test loss
-        y_preds = np.zeros((self.out_channels, 0))
-        ys = np.zeros((0))
-        ys_ = np.zeros((0))
+        y_preds = []
+        ys = []
+        ys_ = []
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -714,12 +716,14 @@ class UNet3D(nn.Module):
             cnt += 1
 
             for b in range(y_pred.size(0)):
-                y_preds = np.concatenate(
-                    (y_preds, F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy()), axis=1)
-                ys = np.concatenate((ys, y[b, 0, ...].flatten().cpu().numpy()))
-                ys_ = np.concatenate((ys_, y_[b, 0, ...].flatten().cpu().numpy()))
+                y_preds.append(F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy())
+                ys.append(y[b, 0, ...].flatten().cpu().numpy())
+                ys_.append(y_[b, 0, ...].flatten().cpu().numpy())
 
         # prep for metric computation
+        y_preds = np.concatenate(y_preds, axis=1)
+        ys = np.concatenate(ys)
+        ys_ = np.concatenate(ys_)
         w = (1 - ys_).astype(bool)
         js = [jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
         ams = [accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
