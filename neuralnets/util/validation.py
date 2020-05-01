@@ -4,11 +4,10 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
-from progress.bar import Bar
-
 from neuralnets.util.io import write_volume
 from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distance
 from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device
+from progress.bar import Bar
 
 
 def sliding_window_multichannel(image, step_size, window_size, in_channels=1, track_progress=False):
@@ -198,6 +197,7 @@ def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None
 
     # pad data if necessary
     data, pad_width = _pad(data[:, np.newaxis, ...], input_shape, 1)
+    data = data[:, 0, ...]
 
     # get the amount of channels
     channels = data.shape[0]
@@ -210,7 +210,7 @@ def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None
 
     # allocate space
     seg_cum = np.zeros((net.out_channels, 1, *data.shape[1:]))
-    counts_cum = np.zeros((1, data.shape[1:]))
+    counts_cum = np.zeros((1, *data.shape[1:]))
 
     # define sliding window
     sw = _init_sliding_window(data[np.newaxis, ...], [channels, *step_size[1:]], input_shape, channels, True,
@@ -232,18 +232,17 @@ def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None
         # perform segmentation when a full batch is filled
         if batch_counter == batch_size:
             # process a single batch
-            _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, [1, *input_shape],
-                           1, False)
+            _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, input_shape, 1,
+                           True)
 
             # reset batch counter
             batch_counter = 0
 
     # don't forget to process the last batch
-    _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, [1, *input_shape], 1,
-                   False)
+    _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, input_shape, 1, True)
 
     # crop out the symmetric extension and compute segmentation
-    data, seg_cum, counts_cum = _crop(data, seg_cum, counts_cum, pad_width)
+    data, seg_cum, counts_cum = _crop(data[:, np.newaxis, ...], seg_cum, counts_cum, pad_width)
     for c in range(net.out_channels):
         seg_cum[c, ...] = np.divide(seg_cum[c, ...], counts_cum)
     seg_cum = seg_cum[:, 0, ...]
