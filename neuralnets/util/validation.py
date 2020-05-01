@@ -171,8 +171,88 @@ def _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions,
                            is2d)
 
 
-def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False,
-                         track_progress=False, device=0, orientation=0):
+def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False,
+                            device=0):
+    """
+    Segment a multichannel 2D image using a specific network
+
+    :param data: 3D array (C, Y, X) representing the multichannel 2D image
+    :param net: image-to-image segmentation network
+    :param input_shape: size of the inputs (2-tuple)
+    :param batch_size: batch size for processing
+    :param step_size: step size of the sliding window
+    :param train: evaluate the network in training mode
+    :param track_progress: optionally, for tracking progress with progress bar
+    :param device: GPU device where the computations should occur
+    :return: the segmented image
+    """
+
+    # make sure we compute everything on the correct device
+    module_to_device(net, device)
+
+    # set the network in the correct mode
+    if train:
+        net.train()
+    else:
+        net.eval()
+
+    # pad data if necessary
+    data, pad_width = _pad(data[:, np.newaxis, ...], input_shape, 1)
+
+    # get the amount of channels
+    channels = data.shape[0]
+
+    # initialize the step size
+    step_size = _init_step_size(step_size, input_shape, True)
+
+    # gaussian window for smooth block merging
+    g_window = _init_gaussian_window(input_shape, True)
+
+    # allocate space
+    seg_cum = np.zeros((net.out_channels, 1, *data.shape[1:]))
+    counts_cum = np.zeros((1, data.shape[1:]))
+
+    # define sliding window
+    sw = _init_sliding_window(data[np.newaxis, ...], [channels, *step_size[1:]], input_shape, channels, True,
+                              track_progress)
+
+    # start prediction
+    batch_counter = 0
+    batch = np.zeros((batch_size, channels, *input_shape))
+    positions = np.zeros((batch_size, 3), dtype=int)
+    for (z, y, x, inputs) in sw:
+
+        # fill batch
+        batch[batch_counter, ...] = inputs
+        positions[batch_counter, :] = [z, y, x]
+
+        # increment batch counter
+        batch_counter += 1
+
+        # perform segmentation when a full batch is filled
+        if batch_counter == batch_size:
+            # process a single batch
+            _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, [1, *input_shape],
+                           1, False)
+
+            # reset batch counter
+            batch_counter = 0
+
+    # don't forget to process the last batch
+    _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions, batch_size, [1, *input_shape], 1,
+                   False)
+
+    # crop out the symmetric extension and compute segmentation
+    data, seg_cum, counts_cum = _crop(data, seg_cum, counts_cum, pad_width)
+    for c in range(net.out_channels):
+        seg_cum[c, ...] = np.divide(seg_cum[c, ...], counts_cum)
+    seg_cum = seg_cum[:, 0, ...]
+
+    return seg_cum
+
+
+def segment_multichannel_3d(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False,
+                            track_progress=False, device=0, orientation=0):
     """
     Segment a multichannel 3D image using a specific network
 
@@ -263,6 +343,33 @@ def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, st
     return seg_cum
 
 
+def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False,
+                         track_progress=False, device=0, orientation=0):
+    """
+    Segment a multichannel 2D or 3D image using a specific network
+
+    :param data: 4D array (C, [Z, ]Y, X) representing the multichannel image
+    :param net: image-to-image segmentation network
+    :param input_shape: size of the inputs (either 2 or 3-tuple)
+    :param in_channels: amount of subsequent slices that serve as input for the network (should be odd)
+    :param batch_size: batch size for processing
+    :param step_size: step size of the sliding window
+    :param train: evaluate the network in training mode
+    :param track_progress: optionally, for tracking progress with progress bar
+    :param device: GPU device where the computations should occur
+    :param orientation: orientation to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
+    :return: the segmented image
+    """
+
+    if data.ndim == 4:
+        return segment_multichannel_3d(data, net, input_shape, in_channels=in_channels, batch_size=batch_size,
+                                       step_size=step_size, train=train, track_progress=track_progress, device=device,
+                                       orientation=orientation)
+    else:
+        return segment_multichannel_2d(data, net, input_shape, batch_size=batch_size, step_size=step_size, train=train,
+                                       track_progress=track_progress, device=device)
+
+
 def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
             device=0, orientation=0):
     """
@@ -287,7 +394,7 @@ def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None,
 
 
 def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(0, 1), batch_size=1, write_dir=None,
-             val_file=None, writer=None, epoch=0, track_progress=False, device=0, orientations=(0, )):
+             val_file=None, writer=None, epoch=0, track_progress=False, device=0, orientations=(0,)):
     """
     Validate a network on a dataset and its labels
 
