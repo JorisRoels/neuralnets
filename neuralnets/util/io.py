@@ -243,6 +243,11 @@ def write_pngseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8'
                     [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
 
+def mkdir(filename):
+    if not os.path.exists(filename):
+        os.mkdir(filename)
+
+
 def _num2str(n, K=4):
     n_str = str(n)
     for k in range(0, K - len(n_str)):
