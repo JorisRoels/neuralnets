@@ -64,7 +64,7 @@ def read_tifseq(dir, dtype='uint8', start=0, stop=-1):
     sz = tiff.imread(os.path.join(dir, files[0])).shape
     if stop < 0:
         stop = len(files)
-    data = np.zeros((stop - start, sz[0], sz[1]), dtype=dtype)
+    data = np.zeros((stop - start, *sz), dtype=dtype)
     for i in range(start, stop):
         data[i-start] = tiff.imread(os.path.join(dir, files[i]))
 
@@ -198,9 +198,9 @@ def write_jpg(x, file, quality=100, dtype='uint8'):
 
 def write_tifseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8', K=4):
     """
-    Write a 3D data set to a directory, slice by slice, as TIF files
+    Write a 3/4D data set to a directory, slice by slice, as TIF files
 
-    :param x: 3D data array
+    :param x: 3/4D data array
     :param dir: directory to write the data to
     :param prefix: prefix of the separate files
     :param index_inc: increment for the index filename (only necessary for sequences)
@@ -216,7 +216,7 @@ def write_tifseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8'
         stop = x.shape[0]
     for i in range(start, stop):
         i_str = _num2str(index_inc + i, K=K)
-        tiff.imsave(dir + '/' + prefix + i_str + '.tif', (x[i, :, :]).astype(dtype))
+        tiff.imsave(dir + '/' + prefix + i_str + '.tif', (x[i, ...]).astype(dtype))
 
 
 def write_pngseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8', K=4):
