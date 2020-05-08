@@ -414,6 +414,19 @@ class UNet2D(nn.Module):
 
         writer.close()
 
+    def set_coi(self, coi):
+        """
+        Adjust the classes of interest of a U-Net, this allows for flexible retraining between classes
+
+        :param coi: tuple indicating the class indices
+        """
+        # adjust fields
+        self.coi = coi
+        self.out_channels = len(coi)
+
+        # adjust output channels
+        self.decoder.output = nn.Conv2d(self.feature_maps, self.out_channels, kernel_size=1)
+
 
 class UNetEncoder3D(nn.Module):
     """
@@ -813,3 +826,16 @@ class UNet3D(nn.Module):
             torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch'))
 
         writer.close()
+
+    def set_coi(self, coi):
+        """
+        Adjust the classes of interest of a U-Net, this allows for flexible retraining between classes
+
+        :param coi: tuple indicating the class indices
+        """
+        # adjust fields
+        self.coi = coi
+        self.out_channels = len(coi)
+
+        # adjust output channels
+        self.decoder.output = nn.Conv3d(self.feature_maps, self.out_channels, kernel_size=1)
