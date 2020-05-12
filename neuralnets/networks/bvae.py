@@ -1,4 +1,3 @@
-import datetime
 import os
 
 import numpy as np
@@ -8,6 +7,7 @@ from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D
+from neuralnets.util.io import print_frm
 from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d
 
 
@@ -274,17 +274,16 @@ class BVAE(nn.Module):
 
             # print statistics if necessary
             if i % print_stats == 0:
-                print('[%s] Epoch %5d - Iteration %5d/%5d - Loss Rec: %.6f - Loss KL: %.6f - Loss: %.6f'
-                      % (datetime.datetime.now(), epoch, i, len(loader.dataset) / loader.batch_size, loss_rec, loss_kl,
-                         loss))
+                print_frm('Epoch %5d - Iteration %5d/%5d - Loss Rec: %.6f - Loss KL: %.6f - Loss: %.6f' % (
+                epoch, i, len(loader.dataset) / loader.batch_size, loss_rec, loss_kl, loss))
 
         # don't forget to compute the average and print it
         loss_rec_avg = loss_rec_cum / cnt
         loss_kl_avg = loss_kl_cum / cnt
         loss_avg = loss_cum / cnt
-        print(
-            '[%s] Epoch %5d - Average train loss rec: %.6f - Average train loss KL: %.6f - Average train loss: %.6f'
-            % (datetime.datetime.now(), epoch, loss_rec_avg, loss_kl_avg, loss_avg))
+        print_frm(
+            'Epoch %5d - Average train loss rec: %.6f - Average train loss KL: %.6f - Average train loss: %.6f' % (
+            epoch, loss_rec_avg, loss_kl_avg, loss_avg))
 
         # log everything
         if writer is not None:
@@ -346,9 +345,8 @@ class BVAE(nn.Module):
         loss_rec_avg = loss_rec_cum / cnt
         loss_kl_avg = loss_kl_cum / cnt
         loss_avg = loss_cum / cnt
-        print(
-            '[%s] Epoch %5d - Average test loss rec: %.6f - Average test loss KL: %.6f - Average test loss: %.6f'
-            % (datetime.datetime.now(), epoch, loss_rec_avg, loss_kl_avg, loss_avg))
+        print_frm('Epoch %5d - Average test loss rec: %.6f - Average test loss KL: %.6f - Average test loss: %.6f' % (
+        epoch, loss_rec_avg, loss_kl_avg, loss_avg))
 
         # log everything
         if writer is not None:
@@ -390,7 +388,7 @@ class BVAE(nn.Module):
         test_loss_min = np.inf
         for epoch in range(epochs):
 
-            print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
+            print_frm('Epoch %5d/%5d' % (epoch, epochs))
 
             # train the model for one epoch
             self.train_epoch(loader=train_loader, loss_rec_fn=loss_rec_fn, loss_kl_fn=loss_kl_fn, optimizer=optimizer,

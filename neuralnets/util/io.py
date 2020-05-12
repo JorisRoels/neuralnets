@@ -4,6 +4,7 @@ import cv2
 import h5py
 import numpy as np
 import tifffile as tiff
+import datetime
 
 
 def read_volume(file, type='tif3d', key=None, start=0, stop=-1, dtype='uint8'):
@@ -246,6 +247,13 @@ def write_pngseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8'
 def mkdir(filename):
     if not os.path.exists(filename):
         os.mkdir(filename)
+
+
+def print_frm(s, time=True, flush=True):
+    if time:
+        print('[%s] %s' % (datetime.datetime.now(), s), flush=flush)
+    else:
+        print(s, flush=flush)
 
 
 def _num2str(n, K=4):

@@ -6,7 +6,6 @@
     Necessary libraries
 """
 import argparse
-import datetime
 import os
 
 import torch.optim as optim
@@ -16,6 +15,7 @@ from torchvision.transforms import Compose
 from neuralnets.data.datasets import StronglyLabeledVolumeDataset
 from neuralnets.networks.unet import UNet2D
 from neuralnets.util.augmentation import *
+from neuralnets.util.io import print_frm
 from neuralnets.util.losses import get_loss_function
 from neuralnets.util.tools import set_seed
 from neuralnets.util.validation import validate
@@ -23,7 +23,7 @@ from neuralnets.util.validation import validate
 """
     Parse all the arguments
 """
-print('[%s] Parsing arguments' % (datetime.datetime.now()))
+print_frm('Parsing arguments')
 parser = argparse.ArgumentParser()
 
 # logging parameters
@@ -77,7 +77,7 @@ set_seed(args.seed)
 """
     Setup logging directory
 """
-print('[%s] Setting up log directories' % (datetime.datetime.now()))
+print_frm('Setting up log directories')
 if not os.path.exists(args.log_dir):
     os.mkdir(args.log_dir)
 
@@ -85,7 +85,7 @@ if not os.path.exists(args.log_dir):
     Load the data
 """
 input_shape = (1, args.input_size[0], args.input_size[1])
-print('[%s] Loading data' % (datetime.datetime.now()))
+print_frm('Loading data')
 augmenter = Compose([ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5),
                      ContrastAdjust(adj=0.1, include_segmentation=True),
                      RandomDeformation_2D(input_shape[1:], grid_size=(64, 64), sigma=0.01, device=args.device,
@@ -107,21 +107,21 @@ test_loader = DataLoader(test, batch_size=args.test_batch_size)
 """
     Build the network
 """
-print('[%s] Building the network' % (datetime.datetime.now()))
+print_frm('Building the network')
 net = UNet2D(in_channels=args.in_channels, feature_maps=args.fm, levels=args.levels, dropout_enc=args.dropout,
              dropout_dec=args.dropout, norm=args.norm, activation=args.activation, coi=args.classes_of_interest)
 
 """
     Setup optimization for training
 """
-print('[%s] Setting up optimization for training' % (datetime.datetime.now()))
+print_frm('Setting up optimization for training')
 optimizer = optim.Adam(net.parameters(), lr=args.lr)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
 """
     Train the network
 """
-print('[%s] Starting training' % (datetime.datetime.now()))
+print_frm('Starting training')
 net.train_net(train_loader, test_loader, loss_fn, optimizer, args.epochs, scheduler=scheduler,
               augmenter=augmenter, print_stats=args.print_stats, log_dir=args.log_dir, device=args.device)
 
@@ -136,4 +136,4 @@ validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batc
          write_dir=os.path.join(args.log_dir, 'segmentation_best'), classes_of_interest=args.classes_of_interest,
          val_file=os.path.join(args.log_dir, 'validation_best.npy'), in_channels=args.in_channels)
 
-print('[%s] Finished!' % (datetime.datetime.now()))
+print_frm('Finished!')

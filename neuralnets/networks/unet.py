@@ -1,4 +1,3 @@
-import datetime
 import os
 
 import numpy as np
@@ -8,6 +7,7 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
+from neuralnets.util.io import print_frm
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d, log_images_3d, \
     augment_samples, get_labels, get_unlabeled, clean_labels
@@ -248,12 +248,12 @@ class UNet2D(nn.Module):
 
             # print statistics if necessary
             if i % print_stats == 0:
-                print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
-                      % (datetime.datetime.now(), epoch, i, len(loader.dataset) / loader.batch_size, loss))
+                print_frm('Epoch %5d - Iteration %5d/%5d - Loss: %.6f' % (
+                epoch, i, len(loader.dataset) / loader.batch_size, loss))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average train loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
+        print_frm('Epoch %5d - Average train loss: %.6f' % (epoch, loss_avg))
 
         # log everything
         if writer is not None:
@@ -330,7 +330,7 @@ class UNet2D(nn.Module):
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average test loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
+        print_frm('Epoch %5d - Average test loss: %.6f' % (epoch, loss_avg))
 
         # log everything
         if writer is not None:
@@ -385,7 +385,7 @@ class UNet2D(nn.Module):
         j_max = 0
         for epoch in range(epochs):
 
-            print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
+            print_frm('Epoch %5d/%5d' % (epoch, epochs))
 
             # train the model for one epoch
             self.train_epoch(loader=train_loader, loss_fn=loss_fn, optimizer=optimizer, epoch=epoch,
@@ -661,12 +661,12 @@ class UNet3D(nn.Module):
 
             # print statistics if necessary
             if i % print_stats == 0:
-                print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
-                      % (datetime.datetime.now(), epoch, i, len(loader.dataset) / loader.batch_size, loss))
+                print_frm('Epoch %5d - Iteration %5d/%5d - Loss: %.6f' % (
+                epoch, i, len(loader.dataset) / loader.batch_size, loss))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average train loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
+        print_frm('Epoch %5d - Average train loss: %.6f' % (epoch, loss_avg))
 
         # log everything
         if writer is not None:
@@ -743,7 +743,7 @@ class UNet3D(nn.Module):
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
-        print('[%s] Epoch %5d - Average test loss: %.6f' % (datetime.datetime.now(), epoch, loss_avg))
+        print_frm('Epoch %5d - Average test loss: %.6f' % (epoch, loss_avg))
 
         # log everything
         if writer is not None:
@@ -798,7 +798,7 @@ class UNet3D(nn.Module):
         j_max = 0
         for epoch in range(epochs):
 
-            print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
+            print_frm('Epoch %5d/%5d' % (epoch, epochs))
 
             # train the model for one epoch
             self.train_epoch(loader=train_loader, loss_fn=loss_fn, optimizer=optimizer, epoch=epoch,

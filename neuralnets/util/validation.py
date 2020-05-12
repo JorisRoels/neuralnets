@@ -1,13 +1,13 @@
-import datetime
 import os
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from neuralnets.util.io import write_volume
+from progress.bar import Bar
+
+from neuralnets.util.io import write_volume, print_frm
 from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distance
 from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device
-from progress.bar import Bar
 
 
 def sliding_window_multichannel(image, step_size, window_size, in_channels=1, track_progress=False):
@@ -414,7 +414,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
-    print('[%s] Validating the trained network' % (datetime.datetime.now()))
+    print_frm('Validating the trained network')
 
     if write_dir is not None and not os.path.exists(write_dir):
         os.mkdir(write_dir)
@@ -440,18 +440,18 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
             h = -1
 
         # report results
-        print('[%s] Validation performance for class %d: ' % (datetime.datetime.now(), classes_of_interest[i]))
-        print('[%s]     - Accuracy: %f' % (datetime.datetime.now(), ams[i - 1][0]))
-        print('[%s]     - Balanced accuracy: %f' % (datetime.datetime.now(), ams[i - 1][1]))
-        print('[%s]     - Precision: %f' % (datetime.datetime.now(), ams[i - 1][2]))
-        print('[%s]     - Recall: %f' % (datetime.datetime.now(), ams[i - 1][3]))
-        print('[%s]     - F1 score: %f' % (datetime.datetime.now(), ams[i - 1][4]))
-        print('[%s]     - Jaccard index: %f' % (datetime.datetime.now(), js[i - 1]))
-        print('[%s]     - Hausdorff distance: %f' % (datetime.datetime.now(), h))
+        print_frm('Validation performance for class %d: ' % (classes_of_interest[i]))
+        print_frm('    - Accuracy: %f' % (ams[i - 1][0]))
+        print_frm('    - Balanced accuracy: %f' % (ams[i - 1][1]))
+        print_frm('    - Precision: %f' % (ams[i - 1][2]))
+        print_frm('    - Recall: %f' % (ams[i - 1][3]))
+        print_frm('    - F1 score: %f' % (ams[i - 1][4]))
+        print_frm('    - Jaccard index: %f' % (js[i - 1]))
+        print_frm('    - Hausdorff distance: %f' % (h))
 
         # write stuff if necessary
         if write_dir is not None:
-            print('[%s] Writing the output for class %d: ' % (datetime.datetime.now(), classes_of_interest[i]))
+            print_frm('Writing the output for class %d: ' % (classes_of_interest[i]))
             wdir = os.path.join(write_dir, 'class_' + str(i))
             if not os.path.exists(wdir):
                 os.mkdir(wdir)
