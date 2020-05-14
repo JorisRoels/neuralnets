@@ -290,3 +290,36 @@ def clean_labels(y, n_classes):
                 y_b[torch.Tensor(mask).bool()] = c
         y_clean[b, 0, ...] = y_b
     return y_clean
+
+
+def normalize(x, type='unit', factor=None, mu=None, sigma=None):
+    """
+    Normalizes an numpy array
+
+    :param x: an arbitrary numpy array
+    :param type: the desired type of normalization (z or unit)
+    :param factor: normalization factor (only if type is unit)
+    :param mu: normalization mean (only if type is z)
+    :param sigma: normalization std (only if type is z)
+    :return: the normalized numpy array
+    """
+    if type == 'z':
+        # apply z normalization
+        if mu is None:
+            mu = 0
+        if sigma is None:
+            sigma = 1
+        return (x - mu) / sigma
+    else:
+        # apply unit normalization
+        if factor == None:
+                factors = {np.dtype('int8'): 2**8 - 1,
+                           np.dtype('uint8'): 2 ** 8 - 1,
+                           np.dtype('int16'): 2**16 - 1,
+                           np.dtype('uint16'): 2**16 - 1,
+                           np.dtype('int32'): 2**32 - 1,
+                           np.dtype('uint32'): 2**32 - 1,
+                           np.dtype('int64'): 2**64 - 1,
+                           np.dtype('uint64'): 2**64 - 1}
+                factor = factors[x.dtype]
+        return x / factor

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.utils.data as data
 
 from neuralnets.util.io import read_volume
-from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input
+from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, normalize
 
 
 def _orient(data, orientation=0):
@@ -90,9 +90,6 @@ class StandardDataset(data.Dataset):
                 F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                               mode='area')[0, 0, ...].numpy()
 
-        # data is rescaled to [0,1]
-        self.data = self.data / 255
-
     def __getitem__(self, i):
         pass
 
@@ -137,7 +134,7 @@ class StronglyLabeledStandardDataset(StandardDataset):
     def __getitem__(self, i):
 
         # get random sample
-        input = self.data[i]
+        input = normalize(self.data[i])
         target = self.labels[i]
 
         if input.shape[0] > 1:
@@ -168,7 +165,7 @@ class UnlabeledStandardDataset(StandardDataset):
     def __getitem__(self, i):
 
         # get random sample
-        input = self.data[i]
+        input = normalize(self.data[i])
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
@@ -211,9 +208,6 @@ class VolumeDataset(data.Dataset):
             self.data = \
                 F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                               mode='area')[0, 0, ...].numpy()
-
-        # data is rescaled to [0,1]
-        self.data = self.data / 255
 
     def __getitem__(self, i):
         pass
@@ -278,6 +272,7 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
         # get random sample
         input, target = sample_labeled_input(self.data, self.labels, input_shape)
+        input = normalize(input)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
@@ -327,6 +322,7 @@ class UnlabeledVolumeDataset(VolumeDataset):
 
         # get random sample
         input = sample_unlabeled_input(self.data, input_shape)
+        input = normalize(input)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
@@ -378,9 +374,6 @@ class MultiVolumeDataset(data.Dataset):
                 data = \
                     F.interpolate(torch.Tensor(data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                                   mode='area')[0, 0, ...].numpy()
-
-            # data is rescaled to [0,1]
-            data = data / 255
 
             self.data.append(data)
             self.data_sizes.append(data.size)
@@ -467,6 +460,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
         # get random sample
         input, target = sample_labeled_input(self.data[self.k], self.labels[self.k], input_shape)
+        input = normalize(input)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
@@ -519,6 +513,7 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
 
         # get random sample
         input = sample_unlabeled_input(self.data[self.k], input_shape)
+        input = normalize(input)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)

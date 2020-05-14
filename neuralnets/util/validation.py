@@ -7,7 +7,7 @@ from progress.bar import Bar
 
 from neuralnets.util.io import write_volume, print_frm
 from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distance
-from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device
+from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device, normalize
 
 
 def sliding_window_multichannel(image, step_size, window_size, in_channels=1, track_progress=False):
@@ -50,9 +50,13 @@ def sliding_window_multichannel(image, step_size, window_size, in_channels=1, tr
 
                 # yield the current window
                 if is2d:
-                    yield (z, y, x, image[0, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]])
+                    input = image[0, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]]
                 else:
+                    input = image[:, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]]
                     yield (z, y, x, image[:, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]])
+                input = normalize(input)
+                yield (z, y, x, input)
+
                 if track_progress:
                     bar.next()
     if track_progress:
