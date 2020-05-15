@@ -227,6 +227,7 @@ class UNet2D(nn.Module):
                 rep += 1
                 if rep == rep_max:
                     x, _, y, y_ = data
+            x = x.float()
             y = y[:, self.c:self.c + 1, ...].round().long()
             # clean labels if necessary (due to augmentations)
             if len(self.coi) > 2:
@@ -645,6 +646,7 @@ class UNet3D(nn.Module):
                 rep += 1
                 if rep == rep_max:
                     x, _, y, y_ = data
+            x = x.float()
             y = y.round().long()
             # clean labels if necessary (due to augmentations)
             if len(self.coi) > 2:
