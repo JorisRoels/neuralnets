@@ -74,14 +74,15 @@ class StandardDataset(data.Dataset):
     :param data_path: path to the dataset
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional dtype: type of the data (typically uint8)
     """
 
-    def __init__(self, data_path, scaling=None, type='tif3d'):
+    def __init__(self, data_path, scaling=None, type='tif3d', dtype='uint8'):
         self.data_path = data_path
         self.scaling = scaling
 
         # load the data
-        self.data = read_volume(data_path, type=type)
+        self.data = read_volume(data_path, type=type, dtype=dtype)
 
         # rescale the dataset if necessary
         if scaling is not None:
@@ -111,16 +112,18 @@ class StronglyLabeledStandardDataset(StandardDataset):
     :param label_path: path to the labels
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional data_dtype: type of the data (typically uint8)
+    :param optional label_dtype: type of the labels (typically uint8)
     """
 
-    def __init__(self, data_path, label_path, scaling=None, type='tif3d', coi=(0, 1)):
-        super().__init__(data_path, scaling=scaling, type=type)
+    def __init__(self, data_path, label_path, scaling=None, type='tif3d', data_dtype='uint8', label_dtype='uint8', coi=(0, 1)):
+        super().__init__(data_path, scaling=scaling, type=type, dtype=data_dtype)
 
         self.label_path = label_path
         self.coi = coi
 
         # load labels
-        self.labels = read_volume(label_path, type=type)
+        self.labels = read_volume(label_path, type=type, dtype=label_dtype)
 
         # rescale the dataset if necessary
         if scaling is not None:
@@ -155,10 +158,11 @@ class UnlabeledStandardDataset(StandardDataset):
     :param data_path: path to the dataset
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional dtype: type of the data (typically uint8)
     """
 
-    def __init__(self, data_path, scaling=None, type='tif3d'):
-        super().__init__(data_path, scaling=scaling, type=type)
+    def __init__(self, data_path, scaling=None, type='tif3d', dtype='uint8'):
+        super().__init__(data_path, scaling=scaling, type=type, dtype=dtype)
 
         self.mu, self.std = self._get_stats()
 
@@ -186,10 +190,11 @@ class VolumeDataset(data.Dataset):
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
+    :param optional dtype: type of the data (typically uint8)
     """
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d', in_channels=1,
-                 orientations=(0,), batch_size=1):
+                 orientations=(0,), batch_size=1, dtype='uint8'):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
@@ -200,7 +205,7 @@ class VolumeDataset(data.Dataset):
         self.batch_size = batch_size
 
         # load the data
-        self.data = read_volume(data_path, type=type)
+        self.data = read_volume(data_path, type=type, dtype=dtype)
 
         # rescale the dataset if necessary
         if scaling is not None:
@@ -239,18 +244,20 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
+    :param optional data_dtype: type of the data (typically uint8)
+    :param optional label_dtype: type of the labels (typically uint8)
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1),
-                 in_channels=1, orientations=(0,), batch_size=1):
+                 in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
-                         in_channels=in_channels, orientations=orientations, batch_size=batch_size)
+                         in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype)
 
         self.label_path = label_path
         self.coi = coi
 
         # load labels
-        self.labels = read_volume(label_path, type=type)
+        self.labels = read_volume(label_path, type=type, dtype=label_dtype)
 
         # rescale the dataset if necessary
         if scaling is not None:
@@ -301,12 +308,13 @@ class UnlabeledVolumeDataset(VolumeDataset):
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
+    :param optional dtype: type of the data (typically uint8)
     """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', in_channels=1,
-                 orientations=(0,), batch_size=1):
+                 orientations=(0,), batch_size=1, dtype='uint8'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
-                         in_channels=in_channels, orientations=orientations, batch_size=batch_size)
+                         in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=dtype)
 
         self.mu, self.std = self._get_stats()
 
@@ -347,10 +355,11 @@ class MultiVolumeDataset(data.Dataset):
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
+    :param optional dtype: type of the data (typically uint8)
     """
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform',
-                 in_channels=1, orientations=(0,), batch_size=1):
+                 in_channels=1, orientations=(0,), batch_size=1, dtype='uint8'):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
@@ -366,7 +375,7 @@ class MultiVolumeDataset(data.Dataset):
         self.data = []
         self.data_sizes = []
         for k, path in enumerate(data_path):
-            data = read_volume(path, type=types[k])
+            data = read_volume(path, type=types[k], dtype=dtype)
 
             # rescale the dataset if necessary
             if scaling is not None:
@@ -421,13 +430,15 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
+    :param optional data_dtype: type of the data (typically uint8)
+    :param optional label_dtype: type of the labels (typically uint8)
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
-                 sampling_mode='uniform', coi=(0, 1), in_channels=1, orientations=(0,), batch_size=1):
+                 sampling_mode='uniform', coi=(0, 1), in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
                          sampling_mode=sampling_mode, in_channels=in_channels, orientations=orientations,
-                         batch_size=batch_size)
+                         batch_size=batch_size, dtype=data_dtype)
 
         self.label_path = label_path
         self.coi = coi
@@ -435,7 +446,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
         # load the data
         self.labels = []
         for k, path in enumerate(label_path):
-            labels = read_volume(path, type=types[k])
+            labels = read_volume(path, type=types[k], dtype=label_dtype)
 
             # rescale the dataset if necessary
             if scaling is not None:
@@ -490,13 +501,14 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
+    :param optional dtype: type of the data (typically uint8)
     """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d',
-                 sampling_mode='uniform', in_channels=1, orientations=(0,), batch_size=1):
+                 sampling_mode='uniform', in_channels=1, orientations=(0,), batch_size=1, dtype='uint8'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
                          sampling_mode=sampling_mode, in_channels=in_channels, orientations=orientations,
-                         batch_size=batch_size)
+                         batch_size=batch_size, dtype=dtype)
 
         self.mu, self.std = self._get_stats()
 

@@ -96,7 +96,7 @@ def read_png(file, dtype='uint8'):
     :param dtype: data type of the output
     """
 
-    data = cv2.imread(file, cv2.IMREAD_GRAYSCALE).astype(dtype)
+    data = cv2.imread(file, cv2.IMREAD_ANYDEPTH).astype(dtype)
 
     return data
 
@@ -109,7 +109,7 @@ def read_jpg(file, dtype='uint8'):
     :param dtype: data type of the output
     """
 
-    data = cv2.imread(file, cv2.IMREAD_GRAYSCALE).astype(dtype)
+    data = cv2.imread(file, cv2.IMREAD_ANYDEPTH).astype(dtype)
 
     return data
 
@@ -126,12 +126,12 @@ def read_pngseq(dir, dtype='uint8', start=0, stop=-1):
 
     files = os.listdir(dir)
     files.sort()
-    sz = cv2.imread(os.path.join(dir, files[0]), cv2.IMREAD_GRAYSCALE).shape
+    sz = cv2.imread(os.path.join(dir, files[0]), cv2.IMREAD_ANYDEPTH).shape
     if stop < 0:
         stop = len(files)
     data = np.zeros((stop - start, sz[0], sz[1]), dtype=dtype)
     for i in range(start, stop):
-        data[i-start] = cv2.imread(os.path.join(dir, files[i]), cv2.IMREAD_GRAYSCALE).astype(dtype)
+        data[i-start] = cv2.imread(os.path.join(dir, files[i]), cv2.IMREAD_ANYDEPTH).astype(dtype)
 
     return data
 
