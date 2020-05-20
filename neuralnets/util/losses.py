@@ -7,7 +7,8 @@ import torch.nn.functional as F
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage import measure
 
-from neuralnets.data.datasets import StronglyLabeledStandardDataset, StronglyLabeledVolumeDataset, StronglyLabeledMultiVolumeDataset
+from neuralnets.data.datasets import StronglyLabeledStandardDataset, StronglyLabeledVolumeDataset, \
+    StronglyLabeledMultiVolumeDataset
 
 from neuralnets.util.tools import tensor_to_device
 
@@ -116,36 +117,42 @@ class DiceLoss(nn.Module):
     """
     Dice loss function
 
-    :param initialization c: index of the class of index
     :param forward logits: logits tensor (B, C, N_1, N_2, ...)
     :param forward target: targets tensor (B, N_1, N_2, ...)
     :return: dice loss
     """
 
-    def __init__(self, c=1):
-        super(DiceLoss, self).__init__()
-
-        self.c = c
-
     def forward(self, logits, target, mask=None):
-        # apply softmax and select predictions of the class of interest
-        p = F.softmax(logits, dim=1)[:, self.c:self.c + 1, ...]
 
-        # reshape everything to vectors
-        p = p.view(-1)
-        target = p.view(-1)
-
-        # mask if necessary
+        # precompute for efficiency
         if mask is not None:
             mask = mask.view(-1)
-            p = p[mask]
-            target = target[mask]
 
-        # dice loss
-        numerator = 2 * torch.sum(p * target)
-        denominator = torch.sum(p + target)
+        # apply softmax and compute dice loss for each class
+        probs = F.softmax(logits, dim=1)
+        dice = 0
+        for c in range(1, logits.size(1)):
+            p = probs[:, c:c + 1, ...]
+            t = (target == c).long()
 
-        return 1 - ((numerator + 1) / (denominator + 1))
+            # reshape everything to vectors
+            p = p.view(-1)
+            t = t.view(-1)
+
+            # mask if necessary
+            if mask is not None:
+                p = p[mask]
+                t = t[mask]
+
+            # dice loss
+            numerator = 2 * torch.sum(p * t)
+            denominator = torch.sum(p + t)
+            dice = dice + (1 - ((numerator + 1) / (denominator + 1)))
+
+        # compute average
+        dice = dice / (logits.size(1) - 1)
+
+        return dice
 
 
 class TverskyLoss(nn.Module):
@@ -165,25 +172,36 @@ class TverskyLoss(nn.Module):
         self.c = c
 
     def forward(self, logits, target, mask=None):
-        # apply softmax and select predictions of the class of interest
-        p = F.softmax(logits, dim=1)[:, self.c:self.c + 1, ...]
 
-        # reshape everything to vectors
-        p = p.view(-1)
-        target = p.view(-1)
-
-        # mask if necessary
+        # precompute for efficiency
         if mask is not None:
             mask = mask.view(-1)
-            p = p[mask]
-            target = target[mask]
 
-        # tversky loss
-        numerator = torch.sum(p * target)
-        denominator = numerator + self.beta * torch.sum((1 - target) * p) + (1 - self.beta) * torch.sum(
-            (1 - p) * target)
+        # apply softmax and compute dice loss for each class
+        probs = F.softmax(logits, dim=1)
+        tversky = 0
+        for c in range(1, logits.size(1)):
+            p = probs[:, c:c + 1, ...]
+            t = (target == c).long()
 
-        return 1 - ((numerator + 1) / (denominator + 1))
+            # reshape everything to vectors
+            p = p.view(-1)
+            t = t.view(-1)
+
+            # mask if necessary
+            if mask is not None:
+                p = p[mask]
+                t = t[mask]
+
+            # dice loss
+            numerator = torch.sum(p * t)
+            denominator = numerator + self.beta * torch.sum((1 - t) * p) + (1 - self.beta) * torch.sum((1 - p) * t)
+            tversky = tversky + (1 - ((numerator + 1) / (denominator + 1)))
+
+        # compute average
+        tversky = tversky / (logits.size(1) - 1)
+
+        return tversky
 
 
 class LpLoss(nn.Module):
