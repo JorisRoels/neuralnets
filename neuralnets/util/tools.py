@@ -118,14 +118,18 @@ def gaussian_window(size, sigma=1):
     return gw
 
 
-def load_net(model_file):
+def load_net(model_file, device):
     """
     Load a pretrained pytorch network
 
     :param model_file: path to the checkpoint
+    :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
     :return: a module that corresponds to the trained network
     """
-    return torch.load(model_file)
+    if not torch.cuda.is_available():
+        return torch.load(model_file)
+    else:
+        return torch.load(model_file, map_location='cuda:' + str(device))
 
 
 def set_seed(seed):
