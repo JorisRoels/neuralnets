@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage import measure
 
+from neuralnets.data.datasets import StronglyLabeledStandardDataset, StronglyLabeledVolumeDataset, StronglyLabeledMultiVolumeDataset
+
 from neuralnets.util.tools import tensor_to_device
 
 
@@ -23,6 +25,9 @@ class CrossEntropyLoss(nn.Module):
     def __init__(self, weight=None, device=0):
 
         super(CrossEntropyLoss, self).__init__()
+
+        self.weight = weight
+        self.device = device
 
         w = None
         if weight is not None:
@@ -41,6 +46,16 @@ class CrossEntropyLoss(nn.Module):
             loss = loss.mean()
 
         return loss
+
+    def set_weight(self, weight=None):
+
+        self.weight = weight
+
+        w = None
+        if weight is not None:
+            w = tensor_to_device(torch.Tensor(weight), device=self.device)
+
+        self.ce = nn.CrossEntropyLoss(weight=w, reduction="none")
 
 
 class FocalLoss(nn.Module):
@@ -350,3 +365,32 @@ def get_loss_function(s):
         return nn.MSELoss(**params)
     elif name == "kld":
         return KLDLoss(**params)
+
+
+def get_balancing_weights(dataset):
+    """
+    Returns a set of balancing weights for a specific labeled dataset
+
+    :param dataset: labeled dataset instance of
+                        - neuralnets.data.datasets.StronglyLabeledStandardDataset
+                        - neuralnets.data.datasets.StronglyLabeledVolumeDataset
+                        - neuralnets.data.datasets.StronglyLabeledMultiVolumeDataset
+    :return: a tuple of balancing weights, if an unsuitable object is provided, it returns None
+    """
+
+    if isinstance(dataset, StronglyLabeledStandardDataset) or isinstance(dataset, StronglyLabeledVolumeDataset):
+        weight = np.zeros((len(dataset.coi)))
+        for i, c in enumerate(dataset.coi):
+            weight[i] = 1 / np.count_nonzero(dataset.labels == c)
+        weight = weight / np.sum(weight)
+        return tuple(weight)
+    elif isinstance(dataset, StronglyLabeledMultiVolumeDataset):
+        freq = np.zeros((len(dataset.coi)))
+        for i, c in enumerate(dataset.coi):
+            for labels in dataset.labels:
+                freq[i] += np.count_nonzero(labels == c)
+        weight = 1 / freq
+        weight = weight / np.sum(weight)
+        return weight
+
+    return None
