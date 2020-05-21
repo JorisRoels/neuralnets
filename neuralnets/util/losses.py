@@ -136,8 +136,8 @@ class DiceLoss(nn.Module):
             t = (target == c).long()
 
             # reshape everything to vectors
-            p = p.view(-1)
-            t = t.view(-1)
+            p = p.contiguous().view(-1)
+            t = t.contiguous().view(-1)
 
             # mask if necessary
             if mask is not None:
@@ -185,8 +185,8 @@ class TverskyLoss(nn.Module):
             t = (target == c).long()
 
             # reshape everything to vectors
-            p = p.view(-1)
-            t = t.view(-1)
+            p = p.contiguous().view(-1)
+            t = t.contiguous().view(-1)
 
             # mask if necessary
             if mask is not None:
