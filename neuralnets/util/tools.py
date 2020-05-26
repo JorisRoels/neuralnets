@@ -118,7 +118,7 @@ def gaussian_window(size, sigma=1):
     return gw
 
 
-def load_net(model_file, device):
+def load_net(model_file, device=0):
     """
     Load a pretrained pytorch network
 
