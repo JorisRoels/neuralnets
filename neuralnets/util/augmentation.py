@@ -121,6 +121,20 @@ class Normalize(object):
         return (x - self.mu) / self.std
 
 
+class NormalizeMinMax(object):
+    """
+    Normalizes the input
+
+    :param forward x: input tensor (N_1, N_2, N_3, ...)
+    :return: output tensor (N_1, N_2, N_3, ...)
+    """
+
+    def __call__(self, x):
+        m = torch.min(x)
+        M = torch.max(x)
+        return (x - m) / (M - m)
+
+
 class ContrastAdjust(object):
     """
     Apply contrast adjustments to the data
