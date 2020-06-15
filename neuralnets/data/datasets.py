@@ -75,11 +75,13 @@ class StandardDataset(data.Dataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional dtype: type of the data (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
-    def __init__(self, data_path, scaling=None, type='tif3d', dtype='uint8'):
+    def __init__(self, data_path, scaling=None, type='tif3d', dtype='uint8', norm_type='unit'):
         self.data_path = data_path
         self.scaling = scaling
+        self.norm_type = norm_type
 
         # load the data
         self.data = read_volume(data_path, type=type, dtype=dtype)
@@ -114,10 +116,12 @@ class StronglyLabeledStandardDataset(StandardDataset):
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional data_dtype: type of the data (typically uint8)
     :param optional label_dtype: type of the labels (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
-    def __init__(self, data_path, label_path, scaling=None, type='tif3d', data_dtype='uint8', label_dtype='uint8', coi=(0, 1)):
-        super().__init__(data_path, scaling=scaling, type=type, dtype=data_dtype)
+    def __init__(self, data_path, label_path, scaling=None, type='tif3d', data_dtype='uint8', label_dtype='uint8',
+                 coi=(0, 1), norm_type='unit'):
+        super().__init__(data_path, scaling=scaling, type=type, dtype=data_dtype, norm_type=norm_type)
 
         self.label_path = label_path
         self.coi = coi
@@ -137,7 +141,7 @@ class StronglyLabeledStandardDataset(StandardDataset):
     def __getitem__(self, i):
 
         # get random sample
-        input = normalize(self.data[i])
+        input = normalize(self.data[i], type=self.norm_type)
         target = self.labels[i]
 
         if input.shape[0] > 1:
@@ -159,17 +163,18 @@ class UnlabeledStandardDataset(StandardDataset):
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional dtype: type of the data (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
-    def __init__(self, data_path, scaling=None, type='tif3d', dtype='uint8'):
-        super().__init__(data_path, scaling=scaling, type=type, dtype=dtype)
+    def __init__(self, data_path, scaling=None, type='tif3d', dtype='uint8', norm_type='unit'):
+        super().__init__(data_path, scaling=scaling, type=type, dtype=dtype, norm_type=norm_type)
 
         self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 
         # get random sample
-        input = normalize(self.data[i])
+        input = normalize(self.data[i], type=self.norm_type)
 
         if input.shape[0] > 1:
             # add channel axis if the data is 3D
@@ -191,10 +196,11 @@ class VolumeDataset(data.Dataset):
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
     :param optional dtype: type of the data (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d', in_channels=1,
-                 orientations=(0,), batch_size=1, dtype='uint8'):
+                 orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit'):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
@@ -203,6 +209,7 @@ class VolumeDataset(data.Dataset):
         self.orientations = orientations
         self.orientation = 0
         self.batch_size = batch_size
+        self.norm_type = norm_type
 
         # load the data
         self.data = read_volume(data_path, type=type, dtype=dtype)
@@ -246,12 +253,15 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
     :param optional batch_size: size of the sampling batch
     :param optional data_dtype: type of the data (typically uint8)
     :param optional label_dtype: type of the labels (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1),
-                 in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8'):
+                 in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
+                 norm_type='unit'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
-                         in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype)
+                         in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
+                         norm_type=norm_type)
 
         self.label_path = label_path
         self.coi = coi
@@ -279,7 +289,7 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
         # get random sample
         input, target = sample_labeled_input(self.data, self.labels, input_shape)
-        input = normalize(input)
+        input = normalize(input, type=self.norm_type)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
@@ -309,12 +319,14 @@ class UnlabeledVolumeDataset(VolumeDataset):
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
     :param optional dtype: type of the data (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', in_channels=1,
-                 orientations=(0,), batch_size=1, dtype='uint8'):
+                 orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
-                         in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=dtype)
+                         in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=dtype,
+                         norm_type=norm_type)
 
         self.mu, self.std = self._get_stats()
 
@@ -330,7 +342,7 @@ class UnlabeledVolumeDataset(VolumeDataset):
 
         # get random sample
         input = sample_unlabeled_input(self.data, input_shape)
-        input = normalize(input)
+        input = normalize(input, type=self.norm_type)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
@@ -356,10 +368,11 @@ class MultiVolumeDataset(data.Dataset):
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
     :param optional dtype: type of the data (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
     def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform',
-                 in_channels=1, orientations=(0,), batch_size=1, dtype='uint8'):
+                 in_channels=1, orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit'):
         self.data_path = data_path
         self.input_shape = input_shape
         self.scaling = scaling
@@ -370,6 +383,7 @@ class MultiVolumeDataset(data.Dataset):
         self.orientation = 0
         self.k = 0
         self.batch_size = batch_size
+        self.norm_type = norm_type
 
         # load the data
         self.data = []
@@ -432,13 +446,15 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional batch_size: size of the sampling batch
     :param optional data_dtype: type of the data (typically uint8)
     :param optional label_dtype: type of the labels (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, types=['tif3d'],
-                 sampling_mode='uniform', coi=(0, 1), in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8'):
+                 sampling_mode='uniform', coi=(0, 1), in_channels=1, orientations=(0,), batch_size=1,
+                 data_dtype='uint8', label_dtype='uint8', norm_type='unit'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
                          sampling_mode=sampling_mode, in_channels=in_channels, orientations=orientations,
-                         batch_size=batch_size, dtype=data_dtype)
+                         batch_size=batch_size, dtype=data_dtype, norm_type=norm_type)
 
         self.label_path = label_path
         self.coi = coi
@@ -471,7 +487,7 @@ class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
 
         # get random sample
         input, target = sample_labeled_input(self.data[self.k], self.labels[self.k], input_shape)
-        input = normalize(input)
+        input = normalize(input, type=self.norm_type)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)
@@ -502,13 +518,15 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
     :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
     :param optional dtype: type of the data (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
     def __init__(self, data_path, input_shape=None, scaling=None, len_epoch=1000, types='tif3d',
-                 sampling_mode='uniform', in_channels=1, orientations=(0,), batch_size=1, dtype='uint8'):
+                 sampling_mode='uniform', in_channels=1, orientations=(0,), batch_size=1, dtype='uint8',
+                 norm_type='unit'):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, types=types,
                          sampling_mode=sampling_mode, in_channels=in_channels, orientations=orientations,
-                         batch_size=batch_size, dtype=dtype)
+                         batch_size=batch_size, dtype=dtype, norm_type=norm_type)
 
         self.mu, self.std = self._get_stats()
 
@@ -525,7 +543,7 @@ class UnlabeledMultiVolumeDataset(MultiVolumeDataset):
 
         # get random sample
         input = sample_unlabeled_input(self.data[self.k], input_shape)
-        input = normalize(input)
+        input = normalize(input, type=self.norm_type)
 
         # reorient sample
         input = _orient(input, orientation=self.orientation)

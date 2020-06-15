@@ -301,7 +301,7 @@ def normalize(x, type='unit', factor=None, mu=None, sigma=None):
     Normalizes an numpy array
 
     :param x: an arbitrary numpy array
-    :param type: the desired type of normalization (z or unit)
+    :param type: the desired type of normalization (z, unit or minmax)
     :param factor: normalization factor (only if type is unit)
     :param mu: normalization mean (only if type is z)
     :param sigma: normalization std (only if type is z)
@@ -314,16 +314,21 @@ def normalize(x, type='unit', factor=None, mu=None, sigma=None):
         if sigma is None:
             sigma = 1
         return (x - mu) / sigma
+    elif type == 'minmax':
+        m = x.min()
+        M = x.max()
+        eps = 1e-5
+        return (x - m + eps) / (M - m + eps)
     else:
         # apply unit normalization
         if factor == None:
-                factors = {np.dtype('int8'): 2**8 - 1,
-                           np.dtype('uint8'): 2 ** 8 - 1,
-                           np.dtype('int16'): 2**16 - 1,
-                           np.dtype('uint16'): 2**16 - 1,
-                           np.dtype('int32'): 2**32 - 1,
-                           np.dtype('uint32'): 2**32 - 1,
-                           np.dtype('int64'): 2**64 - 1,
-                           np.dtype('uint64'): 2**64 - 1}
-                factor = factors[x.dtype]
+            factors = {np.dtype('int8'): 2 ** 8 - 1,
+                       np.dtype('uint8'): 2 ** 8 - 1,
+                       np.dtype('int16'): 2 ** 16 - 1,
+                       np.dtype('uint16'): 2 ** 16 - 1,
+                       np.dtype('int32'): 2 ** 32 - 1,
+                       np.dtype('uint32'): 2 ** 32 - 1,
+                       np.dtype('int64'): 2 ** 64 - 1,
+                       np.dtype('uint64'): 2 ** 64 - 1}
+            factor = factors[x.dtype]
         return x / factor
