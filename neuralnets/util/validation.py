@@ -10,7 +10,7 @@ from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distanc
 from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device, normalize
 
 
-def sliding_window_multichannel(image, step_size, window_size, in_channels=1, track_progress=False):
+def sliding_window_multichannel(image, step_size, window_size, in_channels=1, track_progress=False, normalization='unit'):
     """
     Iterator that acts as a sliding window over a multichannel 3D image
 
@@ -19,6 +19,7 @@ def sliding_window_multichannel(image, step_size, window_size, in_channels=1, tr
     :param window_size: size of the window (3-tuple)
     :param in_channels: amount of subsequent slices that serve as input for the network (should be odd)
     :param track_progress: optionally, for tracking progress with progress bar
+    :param normalization: type of data normalization (unit, z or minmax)
     """
 
     # adjust z-channels if necessary
@@ -54,7 +55,7 @@ def sliding_window_multichannel(image, step_size, window_size, in_channels=1, tr
                 else:
                     input = image[:, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]]
                     yield (z, y, x, image[:, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]])
-                input = normalize(input)
+                input = normalize(input, type=normalization)
                 yield (z, y, x, input)
 
                 if track_progress:
@@ -80,13 +81,13 @@ def _init_gaussian_window(input_shape, is2d):
     return g_window
 
 
-def _init_sliding_window(data, step_size, input_shape, in_channels, is2d, track_progress):
+def _init_sliding_window(data, step_size, input_shape, in_channels, is2d, track_progress, normalization):
     if is2d:
         sw = sliding_window_multichannel(data, step_size=step_size, window_size=(1, input_shape[0], input_shape[1]),
-                                         in_channels=in_channels, track_progress=track_progress)
+                                         in_channels=in_channels, track_progress=track_progress, normalization=normalization)
     else:
         sw = sliding_window_multichannel(data, step_size=step_size, window_size=input_shape,
-                                         track_progress=track_progress)
+                                         track_progress=track_progress, normalization=normalization)
     return sw
 
 
@@ -175,7 +176,7 @@ def _process_batch(net, batch, device, seg_cum, counts_cum, g_window, positions,
 
 
 def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None, train=False, track_progress=False,
-                            device=0):
+                            device=0, normalization='unit'):
     """
     Segment a multichannel 2D image using a specific network
 
@@ -187,6 +188,7 @@ def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None
     :param train: evaluate the network in training mode
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
+    :param normalization: type of data normalization (unit, z or minmax)
     :return: the segmented image
     """
 
@@ -218,7 +220,7 @@ def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None
 
     # define sliding window
     sw = _init_sliding_window(data[np.newaxis, ...], [channels, *step_size[1:]], input_shape, channels, True,
-                              track_progress)
+                              track_progress, normalization)
 
     # start prediction
     batch_counter = 0
@@ -255,7 +257,7 @@ def segment_multichannel_2d(data, net, input_shape, batch_size=1, step_size=None
 
 
 def segment_multichannel_3d(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False,
-                            track_progress=False, device=0, orientation=0):
+                            track_progress=False, device=0, orientation=0, normalization='unit'):
     """
     Segment a multichannel 3D image using a specific network
 
@@ -269,6 +271,7 @@ def segment_multichannel_3d(data, net, input_shape, in_channels=1, batch_size=1,
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
     :param orientation: orientation to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
+    :param normalization: type of data normalization (unit, z or minmax)
     :return: the segmented image
     """
 
@@ -306,7 +309,7 @@ def segment_multichannel_3d(data, net, input_shape, in_channels=1, batch_size=1,
     counts_cum = np.zeros(data.shape[1:])
 
     # define sliding window
-    sw = _init_sliding_window(data, step_size, input_shape, in_channels, is2d, track_progress)
+    sw = _init_sliding_window(data, step_size, input_shape, in_channels, is2d, track_progress, normalization)
 
     # start prediction
     batch_counter = 0
@@ -347,7 +350,7 @@ def segment_multichannel_3d(data, net, input_shape, in_channels=1, batch_size=1,
 
 
 def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False,
-                         track_progress=False, device=0, orientation=0):
+                         track_progress=False, device=0, orientation=0, normalization='unit'):
     """
     Segment a multichannel 2D or 3D image using a specific network
 
@@ -361,20 +364,21 @@ def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, st
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
     :param orientation: orientation to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
+    :param normalization: type of data normalization (unit, z or minmax)
     :return: the segmented image
     """
 
     if data.ndim == 4:
         return segment_multichannel_3d(data, net, input_shape, in_channels=in_channels, batch_size=batch_size,
                                        step_size=step_size, train=train, track_progress=track_progress, device=device,
-                                       orientation=orientation)
+                                       orientation=orientation, normalization=normalization)
     else:
         return segment_multichannel_2d(data, net, input_shape, batch_size=batch_size, step_size=step_size, train=train,
-                                       track_progress=track_progress, device=device)
+                                       track_progress=track_progress, device=device, normalization=normalization)
 
 
 def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
-            device=0, orientation=0):
+            device=0, orientation=0, normalization='unit'):
     """
     Segment a 3D image using a specific network
 
@@ -388,16 +392,17 @@ def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None,
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
     :param orientation: orientation to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
+    :param normalization: type of data normalization (unit, z or minmax)
     :return: the segmented image
     """
 
     return segment_multichannel(data[np.newaxis, ...], net, input_shape, in_channels=in_channels, batch_size=batch_size,
                                 step_size=step_size, train=train, track_progress=track_progress, device=device,
-                                orientation=orientation)
+                                orientation=orientation, normalization=normalization)
 
 
 def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(0, 1), batch_size=1, write_dir=None,
-             val_file=None, writer=None, epoch=0, track_progress=False, device=0, orientations=(0,)):
+             val_file=None, writer=None, epoch=0, track_progress=False, device=0, orientations=(0,), normalization='unit'):
     """
     Validate a network on a dataset and its labels
 
@@ -415,6 +420,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
     :param orientations: list of orientations to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
+    :param normalization: type of data normalization (unit, z or minmax)
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
@@ -427,7 +433,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     segmentation = np.zeros((net.out_channels, *data.shape))
     for orientation in orientations:
         segmentation += segment(data, net, input_size, in_channels=in_channels, batch_size=batch_size,
-                                track_progress=track_progress, device=device, orientation=orientation)
+                                track_progress=track_progress, device=device, orientation=orientation, normalization=normalization)
     segmentation = segmentation / len(orientations)
 
     # compute metrics
