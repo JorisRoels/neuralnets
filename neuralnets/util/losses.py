@@ -58,6 +58,12 @@ class CrossEntropyLoss(nn.Module):
 
         self.ce = nn.CrossEntropyLoss(weight=w, reduction="none")
 
+    def __str__(self):
+        if self.weight is None:
+            return "Cross entropy"
+        else:
+            return "Cross entropy (weights: %s, device: %d)" % (self.weight, self.device)
+
 
 class FocalLoss(nn.Module):
     """
@@ -112,6 +118,12 @@ class FocalLoss(nn.Module):
 
         return loss
 
+    def __str__(self):
+        if self.alpha is None:
+            return "Focal (alpha: [0.5, 0.5], gamma: %f)"
+        else:
+            return "Focal (alpha: %s, gamma: %f)" % (self.alpha, self.gamma)
+
 
 class DiceLoss(nn.Module):
     """
@@ -153,6 +165,9 @@ class DiceLoss(nn.Module):
         dice = dice / (logits.size(1) - 1)
 
         return dice
+
+    def __str__(self):
+        return "Dice"
 
 
 class TverskyLoss(nn.Module):
@@ -203,6 +218,9 @@ class TverskyLoss(nn.Module):
 
         return tversky
 
+    def __str__(self):
+        return "Tversky (beta: %f, c: %d)" % (self.beta, self.c)
+
 
 class LpLoss(nn.Module):
     """
@@ -228,6 +246,9 @@ class LpLoss(nn.Module):
             loss = loss / target.numel()
         return loss
 
+    def __str__(self):
+        return "Lp (p: %f, c: %d)" % (self.p)
+
 
 class L2Loss(nn.Module):
     """
@@ -251,6 +272,9 @@ class L2Loss(nn.Module):
             loss = loss / target.numel()
         return loss
 
+    def __str__(self):
+        return "L2"
+
 
 class MADLoss(nn.Module):
     """
@@ -273,6 +297,9 @@ class MADLoss(nn.Module):
             loss = loss / target.numel()
         return loss
 
+    def __str__(self):
+        return "Mean absolute deviation"
+
 
 class KLDLoss(nn.Module):
     """
@@ -294,6 +321,9 @@ class KLDLoss(nn.Module):
         kld = torch.mean(-0.5 * torch.sum(klds, dim=1), dim=0)
 
         return kld
+
+    def __str__(self):
+        return "Kullback Leibler divergence"
 
 
 def boundary_weight_map(labels, sigma=20, w0=1):
