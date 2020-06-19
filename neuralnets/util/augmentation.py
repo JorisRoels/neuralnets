@@ -108,46 +108,33 @@ class Normalize(object):
     Normalizes the input
 
     :param type: the desired type of normalization (z, unit or minmax)
-    :param factor: normalization factor (only if type is unit)
-    :param mu: normalization mean (only if type is z)
-    :param sigma: normalization std (only if type is z)
+    :param optional bits: number of bits used to represent a pixel value (only if type is unit)
+    :param optional mu: normalization mean (only if type is z)
+    :param optional sigma: normalization std (only if type is z)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, type='unit', factor=None, mu=None, sigma=None):
+    def __init__(self, type='unit', bits=8, mu=None, sigma=None):
         self.type = type
-        self.factor = factor
-        self.factors = {np.dtype('int8'): 2 ** 8 - 1,
-                        np.dtype('uint8'): 2 ** 8 - 1,
-                        np.dtype('int16'): 2 ** 16 - 1,
-                        np.dtype('uint16'): 2 ** 16 - 1,
-                        np.dtype('int32'): 2 ** 32 - 1,
-                        np.dtype('uint32'): 2 ** 32 - 1,
-                        np.dtype('int64'): 2 ** 64 - 1,
-                        np.dtype('uint64'): 2 ** 64 - 1}
+        self.bits = bits
         self.mu = mu
-        if mu is None:
-            self.mu = 0
         self.sigma = sigma
-        if sigma is None:
-            self.sigma = 1
 
     def __call__(self, x):
-        if self.type == 'z':
-            # apply z normalization
-            return (x - self.mu) / self.sigma
-        elif self.type == 'minmax':
+        if self.type == 'minmax':
             # apply minmax normalization
             m = x.min()
             M = x.max()
             eps = 1e-5
             return (x - m + eps) / (M - m + eps)
-        else:
+        elif self.type == 'unit':
             # apply unit normalization
-            factor = self.factor
-            if self.factor is None:
-                factor = self.factors[x.dtype]
-            return x / factor
+            return x / (2**self.bits)
+        else:
+            # apply z normalization
+            mu = torch.mean(x) if self.mu is None else self.mu
+            sigma = torch.std(x) if self.sigma is None else self.sigma
+            return (x - mu) / sigma
 
 
 class ContrastAdjust(object):
