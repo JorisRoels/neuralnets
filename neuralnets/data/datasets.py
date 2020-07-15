@@ -347,7 +347,7 @@ class UnlabeledVolumeDataset(VolumeDataset):
         # reorient sample
         input = _orient(input, orientation=self.orientation)
 
-        if input.shape[0] > 1:
+        if self.input_shape[0] > 1:
             # add channel axis if the data is 3D
             return input[np.newaxis, ...]
         else:

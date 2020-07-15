@@ -120,7 +120,7 @@ class FocalLoss(nn.Module):
 
     def __str__(self):
         if self.alpha is None:
-            return "Focal (alpha: [0.5, 0.5], gamma: %f)"
+            return "Focal (alpha: [0.5, 0.5], gamma: %f)" % (self.gamma)
         else:
             return "Focal (alpha: %s, gamma: %f)" % (self.alpha, self.gamma)
 
