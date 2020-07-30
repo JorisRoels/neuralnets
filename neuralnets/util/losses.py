@@ -145,7 +145,7 @@ class DiceLoss(nn.Module):
         dice = 0
         for c in range(1, logits.size(1)):
             p = probs[:, c:c + 1, ...]
-            t = (target == c).long()
+            t = (target == c).float()
 
             # reshape everything to vectors
             p = p.contiguous().view(-1)
