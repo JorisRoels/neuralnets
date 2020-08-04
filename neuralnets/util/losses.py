@@ -143,7 +143,7 @@ class DiceLoss(nn.Module):
         # apply softmax and compute dice loss for each class
         probs = F.softmax(logits, dim=1)
         dice = 0
-        for c in range(1, logits.size(1)):
+        for c in range(0, logits.size(1)):
             p = probs[:, c:c + 1, ...]
             t = (target == c).float()
 
@@ -162,7 +162,7 @@ class DiceLoss(nn.Module):
             dice = dice + (1 - ((numerator + 1) / (denominator + 1)))
 
         # compute average
-        dice = dice / (logits.size(1) - 1)
+        dice = dice / logits.size(1)
 
         return dice
 
@@ -195,7 +195,7 @@ class TverskyLoss(nn.Module):
         # apply softmax and compute dice loss for each class
         probs = F.softmax(logits, dim=1)
         tversky = 0
-        for c in range(1, logits.size(1)):
+        for c in range(logits.size(1)):
             p = probs[:, c:c + 1, ...]
             t = (target == c).long()
 
@@ -214,7 +214,7 @@ class TverskyLoss(nn.Module):
             tversky = tversky + (1 - ((numerator + 1) / (denominator + 1)))
 
         # compute average
-        tversky = tversky / (logits.size(1) - 1)
+        tversky = tversky / logits.size(1)
 
         return tversky
 
