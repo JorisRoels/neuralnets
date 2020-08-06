@@ -77,12 +77,10 @@ class UNetDecoder(nn.Module):
 
         decoder_outputs = []
 
-        encoder_outputs.reverse()
-
         outputs = inputs
         for i in range(self.levels):
             if self.skip_connections:
-                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[i],
+                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
                                                                        outputs)  # also deals with concat
             else:
                 outputs = getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # no concat
