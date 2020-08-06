@@ -319,7 +319,7 @@ class RotateRandom_2D(object):
         if rnd.rand() < self.prob:
             grid = self._rotation_grid()
             grid = grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
+            return F.grid_sample(x, grid, align_corners=False)
         else:
             return x
 
@@ -364,7 +364,7 @@ class RotateRandom_3D(object):
         if rnd.rand() < self.prob:
             grid = self._rotation_grid()
             grid = grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid)
+            return F.grid_sample(x, grid, align_corners=False)
         else:
             return x
 
@@ -474,7 +474,7 @@ class RandomDeformation_2D(object):
             if x.size()[2:4] != grid.size()[1:3]:  # reshape grid if necessary
                 grid = F.interpolate(grid.permute(0, 3, 1, 2), x.size()[2:4]).permute(0, 2, 3, 1)
             grid = grid.repeat_interleave(x.size(0), dim=0)
-            x_aug = F.grid_sample(x, grid, padding_mode="border")
+            x_aug = F.grid_sample(x, grid, padding_mode="border", align_corners=False)
             if self.include_segmentation:
                 x_aug[x.size(0) // 2:, ...] = torch.round(x_aug[x.size(0) // 2:, ...])
             return x_aug
@@ -551,7 +551,7 @@ class RandomDeformation_3D(object):
                 grid = F.interpolate(grid.permute(0, 3, 1, 2), x.size()[3:5]).permute(0, 2, 3, 1)
             grid = grid.repeat_interleave(x.size(0) * x.size(2), dim=0)
             x_aug = F.grid_sample(torch.reshape(x, (x.size(0) * x.size(2), x.size(1), x.size(3), x.size(4))), grid,
-                                  padding_mode="border")
+                                  padding_mode="border", align_corners=False)
             x_aug = torch.reshape(x_aug, x.size())
             if self.include_segmentation:
                 x_aug[x.size(0) // 2:, ...] = torch.round(x_aug[x.size(0) // 2:, ...])
