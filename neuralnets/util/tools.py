@@ -164,16 +164,16 @@ def tensor_to_device(x, device):
     Transfers a pytorch tensor to a specific GPU device
 
     :param x: tensor or sequence/list of tensors that should be transferred
-    :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
+    :param device: index of the device (if there are no GPU devices or device is None, it will be moved to the CPU)
     :return x: same tensor, but switched to device
     """
     if isinstance(x, tuple) or isinstance(x, list):
-        if not torch.cuda.is_available():
+        if not torch.cuda.is_available() or device is None:
             return [xx.cpu() for xx in x]
         else:
             return [xx.cuda(device=torch.device('cuda:' + str(device))) for xx in x]
     else:
-        if not torch.cuda.is_available():
+        if not torch.cuda.is_available() or device is None:
             return x.cpu()
         else:
             return x.cuda(device=torch.device('cuda:' + str(device)))

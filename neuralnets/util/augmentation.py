@@ -162,10 +162,10 @@ class ContrastAdjust(object):
 
             m = x_.min()
             M = x_.max()
-            m_ = 2 * self.adj * torch.rand(1) - self.adj + m
-            M_ = 2 * self.adj * torch.rand(1) - self.adj + M
-            m_ = m_.cuda(device=x.device)
-            M_ = M_.cuda(device=x.device)
+            r1 = tensor_to_device(torch.rand(1), int(m.device.index))
+            r2 = tensor_to_device(torch.rand(1), int(M.device.index))
+            m_ = 2 * self.adj * r1 - self.adj + m
+            M_ = 2 * self.adj * r2 - self.adj + M
             x_adj = ((x[:x.size(0) // 2, ...] - m) / (M - m)) * (M_ - m_) + m_
 
             if self.include_segmentation:
