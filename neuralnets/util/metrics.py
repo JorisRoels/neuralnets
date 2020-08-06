@@ -26,7 +26,7 @@ def jaccard(y_true, y_pred, w=None):
     intersection = np.sum(y_true * y_pred)
     union = np.sum(y_true) + np.sum(y_pred) - intersection
 
-    return intersection / union
+    return (intersection + 1) / (union + 1)
 
 
 def dice(y_true, y_pred, w=None):
@@ -70,11 +70,11 @@ def accuracy_metrics(y_true, y_pred, w=None):
     fp = np.sum((1 - y_true) * y_pred)
     fn = np.sum(y_true * (1 - y_pred))
     total = tp + tn + fp + fn
-    accuracy = (tp + tn) / total
-    recall = tp / (tp + fn)
-    specificity = tn / (tn + fp)
+    accuracy = (tp + tn + 1) / (total + 1)
+    recall = (tp + 1) / (tp + fn + 1)
+    specificity = (tn + 1) / (tn + fp + 1)
     balanced_accuracy = (recall + specificity) / 2
-    precision = tp / (tp + fp)
+    precision = (tp + 1) / (tp + fp + 1)
     f1 = 2 * (precision * recall) / (precision + recall)
 
     return accuracy, balanced_accuracy, precision, recall, f1
