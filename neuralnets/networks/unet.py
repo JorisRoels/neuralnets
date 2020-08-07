@@ -406,7 +406,8 @@ class UNet2D(UNet):
         hours = seconds // 3600
         minutes = (seconds - hours * 3600) // 60
         seconds = seconds - hours * 3600 - minutes * 60
-        print_frm('Epoch %5d - Runtime for training: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+        print_frm(
+            'Epoch %5d - Runtime for training: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -484,15 +485,16 @@ class UNet2D(UNet):
         hours = seconds // 3600
         minutes = (seconds - hours * 3600) // 60
         seconds = seconds - hours * 3600 - minutes * 60
-        print_frm('Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+        print_frm(
+            'Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
 
         # prep for metric computation
         y_preds = np.concatenate(y_preds, axis=1)
         ys = np.concatenate(ys)
         ys_ = np.concatenate(ys_)
         w = (1 - ys_).astype(bool)
-        js = [jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
-        ams = [accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
+        js = np.asarray([jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(len(self.coi))])
+        ams = np.asarray([accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(len(self.coi))])
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -502,14 +504,11 @@ class UNet2D(UNet):
         if writer is not None:
 
             # always log scalars
-            log_scalars([loss_avg], ['test/' + s for s in ['loss-seg']], writer, epoch=epoch)
-            for i, c in enumerate(self.coi):
-                if not i == 0:  # skip background class
-                    log_scalars([js[i - 1], *(ams[i - 1])], ['test/' + s for s in
-                                                             ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
-                                                              'balanced-accuracy_class_%d)' % (c),
-                                                              'precision_class_%d)' % (c), 'recall_class_%d)' % (c),
-                                                              'f-score_class_%d)' % (c)]], writer, epoch=epoch)
+            log_scalars([loss_avg, np.mean(js, axis=0), *(np.mean(ams, axis=0))], ['test/' + s for s in
+                                                                                   ['loss-seg', 'jaccard', 'accuracy',
+                                                                                    'balanced-accuracy', 'precision',
+                                                                                    'recall', 'f-score']], writer,
+                        epoch=epoch)
 
             # log images if necessary
             if write_images:
@@ -723,7 +722,8 @@ class UNet3D(UNet):
         hours = seconds // 3600
         minutes = (seconds - hours * 3600) // 60
         seconds = seconds - hours * 3600 - minutes * 60
-        print_frm('Epoch %5d - Runtime for training: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+        print_frm(
+            'Epoch %5d - Runtime for training: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -801,15 +801,16 @@ class UNet3D(UNet):
         hours = seconds // 3600
         minutes = (seconds - hours * 3600) // 60
         seconds = seconds - hours * 3600 - minutes * 60
-        print_frm('Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+        print_frm(
+            'Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
 
         # prep for metric computation
         y_preds = np.concatenate(y_preds, axis=1)
         ys = np.concatenate(ys)
         ys_ = np.concatenate(ys_)
         w = (1 - ys_).astype(bool)
-        js = [jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
-        ams = [accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(1, len(self.coi))]
+        js = np.asarray([jaccard((ys == i).astype(int), y_preds[i, :], w=w) for i in range(len(self.coi))])
+        ams = np.asarray([accuracy_metrics((ys == i).astype(int), y_preds[i, :], w=w) for i in range(len(self.coi))])
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -819,14 +820,11 @@ class UNet3D(UNet):
         if writer is not None:
 
             # always log scalars
-            log_scalars([loss_avg], ['test/' + s for s in ['loss-seg']], writer, epoch=epoch)
-            for i, c in enumerate(self.coi):
-                if not i == 0:  # skip background class
-                    log_scalars([js[i - 1], *(ams[i - 1])], ['test/' + s for s in
-                                                             ['jaccard_class_%d)' % (c), 'accuracy_class_%d)' % (c),
-                                                              'balanced-accuracy_class_%d)' % (c),
-                                                              'precision_class_%d)' % (c), 'recall_class_%d)' % (c),
-                                                              'f-score_class_%d)' % (c)]], writer, epoch=epoch)
+            log_scalars([loss_avg, np.mean(js, axis=0), *(np.mean(ams, axis=0))], ['test/' + s for s in
+                                                                                   ['loss-seg', 'jaccard', 'accuracy',
+                                                                                    'balanced-accuracy', 'precision',
+                                                                                    'recall', 'f-score']], writer,
+                        epoch=epoch)
 
             # log images if necessary
             if write_images:
