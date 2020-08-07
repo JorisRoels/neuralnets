@@ -3,6 +3,7 @@ import os
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
+import datetime
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
 from neuralnets.util.io import print_frm
@@ -191,10 +192,10 @@ class UNet(nn.Module):
 
             # adjust learning rate if necessary
             if scheduler is not None:
-                scheduler.step(epoch=epoch)
+                scheduler.step()
 
                 # and keep track of the learning rate
-                writer.add_scalar('learning_rate', float(scheduler.get_lr()[0]), epoch)
+                writer.add_scalar('learning_rate', float(scheduler.get_last_lr()[0]), epoch)
 
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
@@ -348,6 +349,7 @@ class UNet2D(UNet):
         cnt = 0
 
         # start epoch
+        time_start = datetime.datetime.now()
         for i, data in enumerate(loader):
 
             # transfer to suitable device and get labels
@@ -398,6 +400,14 @@ class UNet2D(UNet):
                 print_frm('Epoch %5d - Iteration %5d/%5d - Loss: %.6f' % (
                     epoch, i, len(loader.dataset) / loader.batch_size, loss))
 
+        # keep track of time
+        runtime = datetime.datetime.now() - time_start
+        seconds = runtime.total_seconds()
+        hours = seconds // 3600
+        minutes = (seconds - hours * 3600) // 60
+        seconds = seconds - hours * 3600 - minutes * 60
+        print_frm('Epoch %5d - Runtime for training: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
         print_frm('Epoch %5d - Average train loss: %.6f' % (epoch, loss_avg))
@@ -445,6 +455,7 @@ class UNet2D(UNet):
         y_preds = []
         ys = []
         ys_ = []
+        time_start = datetime.datetime.now()
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -466,6 +477,14 @@ class UNet2D(UNet):
                 y_preds.append(F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy())
                 ys.append(y[b, 0, ...].flatten().cpu().numpy())
                 ys_.append(y_[b, 0, ...].flatten().cpu().numpy())
+
+        # keep track of time
+        runtime = datetime.datetime.now() - time_start
+        seconds = runtime.total_seconds()
+        hours = seconds // 3600
+        minutes = (seconds - hours * 3600) // 60
+        seconds = seconds - hours * 3600 - minutes * 60
+        print_frm('Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
 
         # prep for metric computation
         y_preds = np.concatenate(y_preds, axis=1)
@@ -647,6 +666,7 @@ class UNet3D(UNet):
         cnt = 0
 
         # start epoch
+        time_start = datetime.datetime.now()
         for i, data in enumerate(loader):
 
             # transfer to suitable device and get labels
@@ -697,6 +717,14 @@ class UNet3D(UNet):
                 print_frm('Epoch %5d - Iteration %5d/%5d - Loss: %.6f' % (
                     epoch, i, len(loader.dataset) / loader.batch_size, loss))
 
+        # keep track of time
+        runtime = datetime.datetime.now() - time_start
+        seconds = runtime.total_seconds()
+        hours = seconds // 3600
+        minutes = (seconds - hours * 3600) // 60
+        seconds = seconds - hours * 3600 - minutes * 60
+        print_frm('Epoch %5d - Runtime for training: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
         print_frm('Epoch %5d - Average train loss: %.6f' % (epoch, loss_avg))
@@ -744,6 +772,7 @@ class UNet3D(UNet):
         y_preds = []
         ys = []
         ys_ = []
+        time_start = datetime.datetime.now()
         for i, data in enumerate(loader):
 
             # get the inputs and transfer to suitable device
@@ -765,6 +794,14 @@ class UNet3D(UNet):
                 y_preds.append(F.softmax(y_pred, dim=1)[b, ...].view(y_pred.size(1), -1).data.cpu().numpy())
                 ys.append(y[b, 0, ...].flatten().cpu().numpy())
                 ys_.append(y_[b, 0, ...].flatten().cpu().numpy())
+
+        # keep track of time
+        runtime = datetime.datetime.now() - time_start
+        seconds = runtime.total_seconds()
+        hours = seconds // 3600
+        minutes = (seconds - hours * 3600) // 60
+        seconds = seconds - hours * 3600 - minutes * 60
+        print_frm('Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
 
         # prep for metric computation
         y_preds = np.concatenate(y_preds, axis=1)
