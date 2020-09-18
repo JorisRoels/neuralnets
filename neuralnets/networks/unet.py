@@ -9,6 +9,7 @@ from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, U
 from neuralnets.util.io import print_frm
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 from neuralnets.util.tools import *
+from neuralnets.util.validation import segment
 
 
 class UNetEncoder(nn.Module):
@@ -157,6 +158,28 @@ class UNet(nn.Module):
         """
         pass
 
+    def validate(self, y_true, y_pred):
+        """
+        Validates a segmentation by means of the Jaccard index
+
+        :param y_true: ground truth segmentation ([Z x Y x X] where each position specifies the class label)
+        :param y_pred: predicted segmentation ([C x Z x Y x X] where C is the number of classes)
+        :return: validation metric (Jaccard index)
+        """
+
+        # select pixels with labels
+        w = y_true != 255
+
+        # evaluate all classes
+        j = 0
+        for c in range(y_pred.shape[0]):
+            # compute Jaccard index
+            j += jaccard(y_true == c, y_pred[c], w=w)
+        # aggregate result
+        j /= y_pred.shape[0]
+
+        return j
+
     def train_net(self, train_loader, test_loader, loss_fn, optimizer, epochs, scheduler=None, test_freq=1,
                   augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, device=0):
         """
@@ -199,8 +222,9 @@ class UNet(nn.Module):
 
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
-                j = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer,
-                                    write_images=True, device=device)
+                segmentation = self.segment(test_loader, device=device, epoch=epoch)
+                j = self.validate(test_loader.dataset.labels, segmentation)
+                print_frm('Epoch %5d - Test set performance: IoU=%.6f' % (epoch, j))
 
                 # and save model if higher segmentation performance was obtained
                 if j > j_max:
@@ -524,6 +548,30 @@ class UNet2D(UNet):
 
         return np.mean(js)
 
+    def segment(self, loader, device=0, epoch=0):
+        """
+        Segments the dataset that originates from a dataloader
+
+        :param loader: dataloader that contains the volume
+        :param device: GPU device where the computations should occur
+        :return: the segmented volume
+        """
+
+        time_start = datetime.datetime.now()
+        segmentation = segment(loader.dataset.data, self, loader.dataset.input_shape[1:], in_channels=self.in_channels,
+                       batch_size=loader.batch_size, device=device)
+
+        # keep track of time
+        runtime = datetime.datetime.now() - time_start
+        seconds = runtime.total_seconds()
+        hours = seconds // 3600
+        minutes = (seconds - hours * 3600) // 60
+        seconds = seconds - hours * 3600 - minutes * 60
+        print_frm(
+            'Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+
+        return segmentation
+
     def set_coi(self, coi):
         """
         Adjust the classes of interest of a U-Net, this allows for flexible retraining between classes
@@ -839,6 +887,30 @@ class UNet3D(UNet):
                                       epoch=epoch)
 
         return np.mean(js)
+
+    def segment(self, loader, device=0, epoch=0):
+        """
+        Segments the dataset that originates from a dataloader
+
+        :param loader: dataloader that contains the volume
+        :param device: GPU device where the computations should occur
+        :return: the segmented volume
+        """
+
+        time_start = datetime.datetime.now()
+        segmentation = segment(loader.dataset.data, self, loader.dataset.input_shape, in_channels=self.in_channels,
+                       batch_size=loader.batch_size, device=device)
+
+        # keep track of time
+        runtime = datetime.datetime.now() - time_start
+        seconds = runtime.total_seconds()
+        hours = seconds // 3600
+        minutes = (seconds - hours * 3600) // 60
+        seconds = seconds - hours * 3600 - minutes * 60
+        print_frm(
+            'Epoch %5d - Runtime for testing: %d hours, %d minutes, %f seconds' % (epoch, hours, minutes, seconds))
+
+        return segmentation
 
     def set_coi(self, coi):
         """
