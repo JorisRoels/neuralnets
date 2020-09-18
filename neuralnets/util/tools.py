@@ -333,3 +333,94 @@ def normalize(x, type='unit', factor=None, mu=None, sigma=None):
                        np.dtype('uint64'): 2 ** 64 - 1}
             factor = factors[x.dtype]
         return x / factor
+
+
+def _find_split(y, test_size=0.33, axis=0):
+
+    # reorient data
+    if axis == 1:
+        y_ = np.transpose(y, axes=(1, 0, 2))
+    elif axis == 2:
+        y_ = np.transpose(y, axes=(2, 1, 0))
+    else:
+        y_ = y
+
+    start = 0
+    stop = y_.shape[0] - 1
+    n_total = np.sum(y_ != 255)
+
+    while start != stop:
+
+        # split halfway between start and stop
+        split = (start + stop) // 2
+
+        # compute test size
+        n_test = np.sum(y_[split:] != 255)
+        split_test_size = n_test / n_total
+
+        if split == start:
+            break
+
+        if split_test_size < test_size:
+            # test set needs to be larger
+            stop = split
+        else:
+            # test set needs to be smaller
+            start = split
+
+    split = start
+
+    return split
+
+
+def _maximize_isotropy(shape, splits):
+
+    # for each split and for both train and test volumes,
+    # we compute the difference between a cubic hull and the actual volume
+    maximum_covered_fraction = 0
+    best_dim = 0
+    for d, split in enumerate(splits):
+
+        # volume train set
+        train_shape = np.asarray(shape)
+        train_shape[d] = split
+        train_volume = np.prod(train_shape)
+        train_cubic_hull_volume = np.max(train_shape)**3
+
+        # volume test set
+        test_shape = np.asarray(shape)
+        test_shape[d] = split
+        test_volume = np.prod(test_shape)
+        test_cubic_hull_volume = np.max(test_shape)**3
+
+        # maximize covered fraction
+        covered_fraction = train_volume / train_cubic_hull_volume + test_volume / test_cubic_hull_volume
+        if covered_fraction > maximum_covered_fraction:
+            maximum_covered_fraction = covered_fraction
+            best_dim = d
+
+    return best_dim, splits[best_dim]
+
+
+def train_test_split(x, y=None, test_size=0.33):
+    """
+    Splits a (both labeled and unlabeled) data in a stratified train and test set while maximizing isotropic data dimensions
+
+    :param x: input data
+    :param y: corresponding labels, optional
+    :param test_size: relative size of the test set
+    :return: train test splits of the data
+    """
+
+    if y is None:  # unlabeled dataset, easier case
+        splits = [int(sz * (1-test_size)) for sz in x.shape]
+        d, s = _maximize_isotropy(x.shape, splits)
+        x_train, x_test = np.split(x, [s], d)
+        return x_train, x_test
+    else:  # labeled dataset, additionally make sure labels are balanced in train/test folds
+        splits = [_find_split(y, test_size=test_size, axis=axis) for axis in [0, 1, 2]]
+        d, s = _maximize_isotropy(y.shape, splits)
+        x_train, x_test = np.split(x, [s], d)
+        y_train, y_test = np.split(x, [s], d)
+        return x_train, y_train, x_test, y_test
+
