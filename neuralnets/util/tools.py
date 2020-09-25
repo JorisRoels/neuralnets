@@ -297,12 +297,12 @@ def clean_labels(y, n_classes):
     return y_clean
 
 
-def normalize(x, type='unit', factor=None, mu=None, sigma=None):
+def normalize(x, type=None, factor=None, mu=None, sigma=None):
     """
     Normalizes an numpy array
 
     :param x: an arbitrary numpy array
-    :param type: the desired type of normalization (z, unit or minmax)
+    :param type: the desired type of normalization (None, z, unit or minmax)
     :param factor: normalization factor (only if type is unit)
     :param mu: normalization mean (only if type is z)
     :param sigma: normalization std (only if type is z)
@@ -331,7 +331,10 @@ def normalize(x, type='unit', factor=None, mu=None, sigma=None):
                        np.dtype('uint32'): 2 ** 32 - 1,
                        np.dtype('int64'): 2 ** 64 - 1,
                        np.dtype('uint64'): 2 ** 64 - 1}
-            factor = factors[x.dtype]
+            if x.dtype in factors:
+                factor = factors[x.dtype]
+            else:
+                factor = 1.
         return x / factor
 
 
