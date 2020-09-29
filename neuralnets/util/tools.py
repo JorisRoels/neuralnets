@@ -424,6 +424,6 @@ def train_test_split(x, y=None, test_size=0.33):
         splits = [_find_split(y, test_size=test_size, axis=axis) for axis in [0, 1, 2]]
         d, s = _maximize_isotropy(y.shape, splits)
         x_train, x_test = np.split(x, [s], d)
-        y_train, y_test = np.split(x, [s], d)
+        y_train, y_test = np.split(y, [s], d)
         return x_train, y_train, x_test, y_test
 
