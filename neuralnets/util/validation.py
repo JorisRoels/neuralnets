@@ -5,12 +5,13 @@ import torch
 import torch.nn.functional as F
 from progress.bar import Bar
 
-from neuralnets.util.io import write_volume, print_frm
+from neuralnets.util.io import write_volume, print_frm, mkdir
 from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distance
 from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device, normalize
 
 
-def sliding_window_multichannel(image, step_size, window_size, in_channels=1, track_progress=False, normalization='unit'):
+def sliding_window_multichannel(image, step_size, window_size, in_channels=1, track_progress=False,
+                                normalization='unit'):
     """
     Iterator that acts as a sliding window over a multichannel 3D image
 
@@ -84,7 +85,8 @@ def _init_gaussian_window(input_shape, is2d):
 def _init_sliding_window(data, step_size, input_shape, in_channels, is2d, track_progress, normalization):
     if is2d:
         sw = sliding_window_multichannel(data, step_size=step_size, window_size=(1, input_shape[0], input_shape[1]),
-                                         in_channels=in_channels, track_progress=track_progress, normalization=normalization)
+                                         in_channels=in_channels, track_progress=track_progress,
+                                         normalization=normalization)
     else:
         sw = sliding_window_multichannel(data, step_size=step_size, window_size=input_shape,
                                          track_progress=track_progress, normalization=normalization)
@@ -402,7 +404,7 @@ def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None,
 
 
 def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(0, 1), batch_size=1, write_dir=None,
-             val_file=None, writer=None, epoch=0, track_progress=False, device=0, orientations=(0,), normalization='unit'):
+             val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit'):
     """
     Validate a network on a dataset and its labels
 
@@ -415,8 +417,6 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :param batch_size: batch size for processing
     :param write_dir: optionally, specify a directory to write the output
     :param val_file: optionally, specify a file to write the validation results
-    :param writer: optionally, summary writer for logging to tensorboard
-    :param epoch: optionally, current epoch for logging to tensorboard
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
     :param orientations: list of orientations to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
@@ -424,57 +424,56 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
-    print_frm('Validating the trained network')
-
-    if write_dir is not None and not os.path.exists(write_dir):
-        os.mkdir(write_dir)
+    print_frm('Validating the trained network...')
 
     # compute segmentation for each orientation and average results
     segmentation = np.zeros((net.out_channels, *data.shape))
     for orientation in orientations:
         segmentation += segment(data, net, input_size, in_channels=in_channels, batch_size=batch_size,
-                                track_progress=track_progress, device=device, orientation=orientation, normalization=normalization)
+                                track_progress=track_progress, device=device, orientation=orientation,
+                                normalization=normalization)
     segmentation = segmentation / len(orientations)
 
     # compute metrics
     w = labels != 255
     comp_hausdorff = np.sum(labels == 255) == 0
-    js = [jaccard(segmentation[i], (labels == classes_of_interest[i]).astype('float'), w=w) for i in
-          range(1, len(classes_of_interest))]
-    ams = [accuracy_metrics(segmentation[i], (labels == classes_of_interest[i]).astype('float'), w=w) for i in
-           range(1, len(classes_of_interest))]
-    for i in range(1, len(classes_of_interest)):
+    js = np.asarray(
+        [jaccard(segmentation[i], (labels == c).astype('float'), w=w) for i, c in enumerate(classes_of_interest)])
+    ams = np.asarray([accuracy_metrics(segmentation[i], (labels == c).astype('float'), w=w) for i, c in
+                      enumerate(classes_of_interest)])
+    for i, c in enumerate(classes_of_interest):
         if comp_hausdorff:
             h = hausdorff_distance(segmentation[i], labels)[0]
         else:
             h = -1
 
         # report results
-        print_frm('Validation performance for class %d: ' % (classes_of_interest[i]))
-        print_frm('    - Accuracy: %f' % (ams[i - 1][0]))
-        print_frm('    - Balanced accuracy: %f' % (ams[i - 1][1]))
-        print_frm('    - Precision: %f' % (ams[i - 1][2]))
-        print_frm('    - Recall: %f' % (ams[i - 1][3]))
-        print_frm('    - F1 score: %f' % (ams[i - 1][4]))
-        print_frm('    - Jaccard index: %f' % (js[i - 1]))
-        print_frm('    - Hausdorff distance: %f' % (h))
+        print_frm('Validation performance for class %d: ' % c)
+        print_frm('    - Accuracy: %f' % ams[i, 0])
+        print_frm('    - Balanced accuracy: %f' % ams[i, 1])
+        print_frm('    - Precision: %f' % ams[i, 2])
+        print_frm('    - Recall: %f' % ams[i, 3])
+        print_frm('    - F1 score: %f' % ams[i, 4])
+        print_frm('    - IoU: %f' % js[i])
+        print_frm('    - Hausdorff distance: %f' % h)
 
-        # write stuff if necessary
-        if write_dir is not None:
-            print_frm('Writing the output for class %d: ' % (classes_of_interest[i]))
-            wdir = os.path.join(write_dir, 'class_' + str(i))
-            if not os.path.exists(wdir):
-                os.mkdir(wdir)
-                write_volume(255 * segmentation[i], wdir, type='pngseq')
-        if writer is not None:
-            z = data.shape[0] // 2
-            N = 1024
-            if data.shape[1] > N:
-                writer.add_image('val/input', data[z:z + 1, :N, :N], epoch)
-                writer.add_image('val/segmentation', segmentation[z:z + 1, :N, :N], epoch)
-            else:
-                writer.add_image('val/input', data[z:z + 1, ...], epoch)
-                writer.add_image('val/segmentation', segmentation[z:z + 1, ...], epoch)
+    # report results
+    print_frm('Validation performance mean: ')
+    print_frm('    - Accuracy: %f' % np.mean(ams[:, 0]))
+    print_frm('    - Balanced accuracy: %f' % np.mean(ams[:, 1]))
+    print_frm('    - Precision: %f' % np.mean(ams[:, 2]))
+    print_frm('    - Recall: %f' % np.mean(ams[:, 3]))
+    print_frm('    - F1 score: %f' % np.mean(ams[:, 4]))
+    print_frm('    - mIoU: %f' % np.mean(js))
+
+    # write stuff if necessary
+    if write_dir is not None:
+        print_frm('Writing out the segmentation...')
+        mkdir(write_dir)
+        segmentation_volume = np.zeros(segmentation.shape[1:])
+        for i, c in enumerate(classes_of_interest):
+            segmentation_volume[segmentation[i] > 0.5] = c
+        write_volume(segmentation_volume, write_dir, type='pngseq')
     if val_file is not None:
-        np.save(val_file, np.concatenate((np.asarray(js)[:, np.newaxis], np.asarray(ams)), axis=1))
+        np.save(val_file, np.concatenate((js[:, np.newaxis], ams), axis=1))
     return js, ams
