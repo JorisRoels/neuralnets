@@ -404,7 +404,7 @@ def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None,
 
 
 def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(0, 1), batch_size=1, write_dir=None,
-             val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit'):
+             val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit', hausdorff=False):
     """
     Validate a network on a dataset and its labels
 
@@ -421,6 +421,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :param device: GPU device where the computations should occur
     :param orientations: list of orientations to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
     :param normalization: type of data normalization (unit, z or minmax)
+    :param hausdorff: compute hausdorff or not
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
@@ -436,14 +437,14 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
 
     # compute metrics
     w = labels != 255
-    comp_hausdorff = np.sum(labels == 255) == 0
+    comp_hausdorff = np.sum(labels == 255) == 0 and hausdorff
     js = np.asarray(
         [jaccard(segmentation[i], (labels == c).astype('float'), w=w) for i, c in enumerate(classes_of_interest)])
     ams = np.asarray([accuracy_metrics(segmentation[i], (labels == c).astype('float'), w=w) for i, c in
                       enumerate(classes_of_interest)])
     for i, c in enumerate(classes_of_interest):
         if comp_hausdorff:
-            h = hausdorff_distance(segmentation[i], labels)[0]
+            h = hausdorff_distance(segmentation[i], (labels == c).astype('float'))[0]
         else:
             h = -1
 
