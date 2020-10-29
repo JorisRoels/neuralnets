@@ -118,18 +118,71 @@ def gaussian_window(size, sigma=1):
     return gw
 
 
-def load_net(model_file, device=0):
+def load_unet(model_file, device=0):
     """
-    Load a pretrained pytorch network
+    Load a pretrained pytorch U-Net network
 
-    :param model_file: path to the checkpoint
+    :param model_file: path to the state dict checkpoint
     :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
     :return: a module that corresponds to the trained network
     """
-    if not torch.cuda.is_available():
-        return torch.load(model_file)
+    from neuralnets.networks.unet import UNet2D, UNet3D
+
+    if not torch.cuda.is_available() or device == 'cpu':
+        state_dict = torch.load(model_file, map_location='cpu')
     else:
-        return torch.load(model_file, map_location='cuda:' + str(device))
+        state_dict = torch.load(model_file, map_location='cuda:' + str(device))
+
+    # extract the hyperparameters of the network
+    in_channels = state_dict['encoder.features.convblock1.conv1.unit.0.weight'].size(1)
+    feature_maps = state_dict['encoder.features.convblock1.conv1.unit.0.weight'].size(0)
+    out_channels = state_dict['decoder.output.weight'].size(0)
+    coi = tuple(np.arange(0, out_channels))
+    levels = int(list(state_dict.keys())[-3][len('encoder.features.convblock')])
+    skip_connections = True
+    norm = 'batch' if 'norm' in list(state_dict.keys())[2] else 'instance'
+    activation = 'relu'
+    dropout_enc = 0.0
+    dropout_dec = 0.0
+
+    # initialize the network
+    if state_dict['encoder.features.convblock1.conv1.unit.0.weight'].dim() == 4:
+        net = UNet2D(in_channels=in_channels, coi=coi, feature_maps=feature_maps, levels=levels,
+                     skip_connections=skip_connections, norm=norm, activation=activation, dropout_enc=dropout_enc,
+                     dropout_dec=dropout_dec)
+    else:
+        net = UNet3D(in_channels=in_channels, coi=coi, feature_maps=feature_maps, levels=levels,
+                     skip_connections=skip_connections, norm=norm, activation=activation, dropout_enc=dropout_enc,
+                     dropout_dec=dropout_dec)
+
+    # load the parameters in the model
+    net.load_state_dict(state_dict)
+
+    # map to the correct device
+    module_to_device(net, device=device)
+
+    return net
+
+
+def load_net(model_file, device=0):
+    """
+    Load a pretrained pytorch network, currently only support for U-Net
+
+    :param model_file: path to the state dict checkpoint
+    :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
+    :return: a module that corresponds to the trained network
+    """
+    return load_unet(model_file, device=device)
+
+
+def save_net(model, model_file):
+    """
+    Save a pytorch network
+
+    :param model: path to the state dict checkpoint
+    :param model_file: path to the state dict checkpoint
+    """
+    torch.save(model.state_dict(), model_file)
 
 
 def set_seed(seed):
@@ -151,9 +204,9 @@ def module_to_device(module, device):
     Transfers a pytorch module to a specific GPU device
 
     :param module: module that should be transferred
-    :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
+    :param device: index of the device, or 'cpu' (if there are no GPU devices, it will be moved to the CPU)
     """
-    if not torch.cuda.is_available():
+    if not torch.cuda.is_available() or device == 'cpu':
         module.cpu()
     else:
         module.cuda(device=device)

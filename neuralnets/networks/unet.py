@@ -205,21 +205,12 @@ class UNet(nn.Module):
                 # and save model if higher segmentation performance was obtained
                 if j > j_max:
                     j_max = j
-                    torch.save(self.state_dict(), os.path.join(log_dir, 'best_checkpoint.pytorch'))
+                    save_net(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
 
             # save model every epoch
-            torch.save(self.state_dict(), os.path.join(log_dir, 'checkpoint.pytorch'))
+            save_net(self, os.path.join(log_dir, 'checkpoint.pytorch'))
 
         writer.close()
-
-    def load_weights(self, cpt_file, device):
-        """
-        Load pretrained weights in the model and transfer to a specific device
-
-        :param cpt_file: path of the chekcpoint file
-        :param device: GPU device where the computations should occur
-        """
-        self.load_state_dict(load_net(cpt_file, device=device).state_dict())
 
 
 class UNetEncoder2D(UNetEncoder):
