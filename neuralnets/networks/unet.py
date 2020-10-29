@@ -229,10 +229,10 @@ class UNet(nn.Module):
                 # and save model if higher segmentation performance was obtained
                 if j > j_max:
                     j_max = j
-                    torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
+                    save_net(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
 
             # save model every epoch
-            torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch'))
+            save_net(self, os.path.join(log_dir, 'checkpoint.pytorch'))
 
         writer.close()
 
