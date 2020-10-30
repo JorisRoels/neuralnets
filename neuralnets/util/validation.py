@@ -436,15 +436,14 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     segmentation = segmentation / len(orientations)
 
     # compute metrics
-    w = labels != 255
-    comp_hausdorff = np.sum(labels == 255) == 0 and hausdorff
-    js = np.asarray(
-        [jaccard(segmentation[i], (labels == c).astype('float'), w=w) for i, c in enumerate(classes_of_interest)])
-    ams = np.asarray([accuracy_metrics(segmentation[i], (labels == c).astype('float'), w=w) for i, c in
-                      enumerate(classes_of_interest)])
+    all_labeled = np.sum(labels == 255) == 0
+    w = None if all_labeled else labels != 255
+    comp_hausdorff = all_labeled and hausdorff
+    js = np.asarray([jaccard(segmentation[i], labels == c, w=w) for i, c in enumerate(classes_of_interest)])
+    ams = np.asarray([accuracy_metrics(segmentation[i], labels == c, w=w) for i, c in enumerate(classes_of_interest)])
     for i, c in enumerate(classes_of_interest):
         if comp_hausdorff:
-            h = hausdorff_distance(segmentation[i], (labels == c).astype('float'))[0]
+            h = hausdorff_distance(segmentation[i], labels == c)[0]
         else:
             h = -1
 
