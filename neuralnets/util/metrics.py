@@ -20,15 +20,15 @@ def _jaccard_part_metrics(y_true, y_pred, w=None, max_elements=1000000):
         w = w.flatten()
         y_true = y_true[w]
         y_pred = y_pred[w]
-    y_true = y_true.astype('bool')
-    y_pred = y_pred.astype('bool')
+    y_true = y_true > 0.5
+    y_pred = y_pred > 0.5
 
     # compute metrics
     intersection = 0
     true_total = 0
     pred_total = 0
     n_blocks = y_true.size // max_elements
-    for n in range(n_blocks):
+    for n in range(n_blocks + 1):
         # find start and stopping point
         start = max_elements * n
         stop = np.minimum(max_elements * (n+1), y_true.size)
@@ -95,8 +95,8 @@ def _conf_matrix_metrics(y_true, y_pred, w=None, max_elements=1000000):
         w = w.flatten()
         y_true = y_true[w]
         y_pred = y_pred[w]
-    y_true = y_true.astype('bool')
-    y_pred = y_pred.astype('bool')
+    y_true = y_true > 0.5
+    y_pred = y_pred > 0.5
 
     # compute metrics
     tp = 0

@@ -17,7 +17,7 @@ from neuralnets.networks.unet import UNet3D
 from neuralnets.util.augmentation import *
 from neuralnets.util.io import print_frm
 from neuralnets.util.losses import get_loss_function
-from neuralnets.util.tools import set_seed
+from neuralnets.util.tools import set_seed, load_net
 from neuralnets.util.validation import validate
 
 """
@@ -126,7 +126,7 @@ net.train_net(train_loader, test_loader, loss_fn, optimizer, args.epochs, schedu
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
          write_dir=os.path.join(args.log_dir, 'segmentation_final'), classes_of_interest=args.classes_of_interest,
          val_file=os.path.join(args.log_dir, 'validation_final.npy'))
-net = torch.load(os.path.join(args.log_dir, 'best_checkpoint.pytorch'))
+net = load_net(os.path.join(args.log_dir, 'best_checkpoint.pytorch'))
 validate(net, test.data, test.labels, args.input_size, batch_size=args.test_batch_size,
          write_dir=os.path.join(args.log_dir, 'segmentation_best'), classes_of_interest=args.classes_of_interest,
          val_file=os.path.join(args.log_dir, 'validation_best.npy'))
