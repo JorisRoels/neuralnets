@@ -146,7 +146,7 @@ def _forward_prop(net, x):
     # if the outputs are a tuple, take the last
     if type(outputs) is tuple:
         outputs = outputs[-1]
-    return F.softmax(outputs, dim=1)
+    return F.softmax(outputs, dim=1).detach().cpu().numpy()
 
 
 def _cumulate_segmentation(seg_cum, counts_cum, outputs, g_window, positions, batch_size, input_shape, in_channels,
@@ -158,11 +158,11 @@ def _cumulate_segmentation(seg_cum, counts_cum, outputs, g_window, positions, ba
         if is2d:
             z_b += c  # correct channel shift
             seg_cum[:, z_b, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += \
-                np.multiply(g_window, outputs.data.cpu().numpy()[b, ...])
+                np.multiply(g_window, outputs[b, ...])
             counts_cum[z_b:z_b + 1, y_b:y_b + input_shape[0], x_b:x_b + input_shape[1]] += g_window
         else:
             seg_cum[:, z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += \
-                np.multiply(g_window, outputs.data.cpu().numpy()[b, ...])
+                np.multiply(g_window, outputs[b, ...])
             counts_cum[z_b:z_b + input_shape[0], y_b:y_b + input_shape[1], x_b:x_b + input_shape[2]] += g_window
 
 
