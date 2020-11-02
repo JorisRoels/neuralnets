@@ -16,7 +16,6 @@ from neuralnets.data.datasets import UnlabeledVolumeDataset
 from neuralnets.networks.bvae import BVAE
 from neuralnets.util.augmentation import *
 from neuralnets.util.io import print_frm
-from neuralnets.util.losses import get_loss_function
 from neuralnets.util.tools import set_seed
 
 """
@@ -38,7 +37,7 @@ parser.add_argument("--input_size", help="Size of the blocks that propagate thro
                     type=str, default="64,64")
 parser.add_argument("--fm", help="Number of initial feature maps in the segmentation U-Net", type=int, default=128)
 parser.add_argument("--levels", help="Number of levels in the segmentation U-Net (i.e. number of pooling stages)",
-                    type=int, default=4)
+                    type=int, default=3)
 parser.add_argument("--dropout", help="Dropout", type=float, default=0.0)
 parser.add_argument("--norm", help="Normalization in the network (batch or instance)", type=str, default="batch")
 parser.add_argument("--activation", help="Non-linear activations in the network", type=str, default="relu")
@@ -58,8 +57,6 @@ parser.add_argument("--test_batch_size", help="Batch size in the testing stage",
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
-loss_rec_fn = get_loss_function('mse')
-loss_kl_fn = get_loss_function('kld')
 
 """
 Fix seed (for reproducibility)
@@ -78,9 +75,9 @@ if not os.path.exists(args.log_dir):
 """
 input_shape = (1, args.input_size[0], args.input_size[1])
 print_frm('Loading data')
-augmenter = Compose([ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5),
-                     ContrastAdjust(adj=0.1),
-                     RandomDeformation_2D(input_shape[1:], grid_size=(64, 64), sigma=0.01, device=args.device)])
+augmenter = Compose(
+    [ToFloatTensor(device=args.device), Rotate90(), FlipX(prob=0.5), FlipY(prob=0.5), ContrastAdjust(adj=0.1),
+     RandomDeformation_2D(input_shape[1:], grid_size=(64, 64), sigma=0.01, device=args.device)])
 train = UnlabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/train'), input_shape=input_shape,
                                len_epoch=args.len_epoch, type='pngseq')
 test = UnlabeledVolumeDataset(os.path.join(args.data_dir, 'EM/EPFL/test'), input_shape=input_shape,
@@ -107,7 +104,7 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma
     Train the network
 """
 print_frm('Starting training')
-net.train_net(train_loader, test_loader, loss_rec_fn, loss_kl_fn, optimizer, args.epochs, scheduler=scheduler,
-              augmenter=augmenter, print_stats=args.print_stats, log_dir=args.log_dir, device=args.device)
+net.train_net(train_loader, test_loader, optimizer, args.epochs, scheduler=scheduler, augmenter=augmenter,
+              print_stats=args.print_stats, log_dir=args.log_dir, device=args.device)
 
 print_frm('Finished!')

@@ -8,7 +8,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D
 from neuralnets.util.io import print_frm
-from neuralnets.util.tools import module_to_device, tensor_to_device, log_scalars, log_images_2d
+from neuralnets.util.tools import *
+from neuralnets.util.losses import get_loss_function
 
 
 def _reparametrise(mu, logvar):
@@ -190,6 +191,9 @@ class BVAE(nn.Module):
         self.logvar = None
         self.z = None
 
+        self.loss_rec_fn = get_loss_function('mse')
+        self.loss_kl_fn = get_loss_function('kld')
+
         # contractive path
         self.encoder = Encoder(input_size=input_size, bottleneck_dim=bottleneck_dim, in_channels=in_channels,
                                feature_maps=feature_maps, levels=levels, norm=norm, dropout=dropout_enc,
@@ -215,13 +219,11 @@ class BVAE(nn.Module):
 
         return outputs
 
-    def train_epoch(self, loader, loss_rec_fn, loss_kl_fn, optimizer, epoch, augmenter=None, print_stats=1, writer=None,
+    def train_epoch(self, loader, optimizer, epoch, augmenter=None, print_stats=1, writer=None,
                     write_images=False, device=0):
         """
         Trains the network for one epoch
         :param loader: dataloader
-        :param loss_rec_fn: reconstruction loss function
-        :param loss_kl_fn: kullback leibler loss function
         :param optimizer: optimizer for the loss function
         :param epoch: current epoch
         :param augmenter: data augmenter
@@ -258,8 +260,8 @@ class BVAE(nn.Module):
             x_pred = torch.sigmoid(self(x))
 
             # compute loss
-            loss_rec = loss_rec_fn(x_pred, x)
-            loss_kl = loss_kl_fn(self.mu, self.logvar)
+            loss_rec = self.loss_rec_fn(x_pred, x)
+            loss_kl = self.loss_kl_fn(self.mu, self.logvar)
             loss = loss_rec + self.beta * loss_kl
             loss_rec_cum += loss_rec.data.cpu().numpy()
             loss_kl_cum += loss_kl.data.cpu().numpy()
@@ -275,7 +277,7 @@ class BVAE(nn.Module):
             # print statistics if necessary
             if i % print_stats == 0:
                 print_frm('Epoch %5d - Iteration %5d/%5d - Loss Rec: %.6f - Loss KL: %.6f - Loss: %.6f' % (
-                epoch, i, len(loader.dataset) / loader.batch_size, loss_rec, loss_kl, loss))
+                    epoch, i, len(loader.dataset) / loader.batch_size, loss_rec, loss_kl, loss))
 
         # don't forget to compute the average and print it
         loss_rec_avg = loss_rec_cum / cnt
@@ -283,7 +285,7 @@ class BVAE(nn.Module):
         loss_avg = loss_cum / cnt
         print_frm(
             'Epoch %5d - Average train loss rec: %.6f - Average train loss KL: %.6f - Average train loss: %.6f' % (
-            epoch, loss_rec_avg, loss_kl_avg, loss_avg))
+                epoch, loss_rec_avg, loss_kl_avg, loss_avg))
 
         # log everything
         if writer is not None:
@@ -298,12 +300,10 @@ class BVAE(nn.Module):
 
         return loss_avg
 
-    def test_epoch(self, loader, loss_rec_fn, loss_kl_fn, epoch, writer=None, write_images=False, device=0):
+    def test_epoch(self, loader, epoch, writer=None, write_images=False, device=0):
         """
         Tests the network for one epoch
         :param loader: dataloader
-        :param loss_rec_fn: reconstruction loss function
-        :param loss_kl_fn: kullback leibler loss function
         :param epoch: current epoch
         :param writer: summary writer
         :param write_images: frequency of writing images
@@ -333,8 +333,8 @@ class BVAE(nn.Module):
             li.append(x.cpu().data.numpy())
 
             # compute loss
-            loss_rec = loss_rec_fn(x_pred, x)
-            loss_kl = loss_kl_fn(self.mu, self.logvar)
+            loss_rec = self.loss_rec_fn(x_pred, x)
+            loss_kl = self.loss_kl_fn(self.mu, self.logvar)
             loss = loss_rec + self.beta * loss_kl
             loss_rec_cum += loss_rec.data.cpu().numpy()
             loss_kl_cum += loss_kl.data.cpu().numpy()
@@ -346,7 +346,7 @@ class BVAE(nn.Module):
         loss_kl_avg = loss_kl_cum / cnt
         loss_avg = loss_cum / cnt
         print_frm('Epoch %5d - Average test loss rec: %.6f - Average test loss KL: %.6f - Average test loss: %.6f' % (
-        epoch, loss_rec_avg, loss_kl_avg, loss_avg))
+            epoch, loss_rec_avg, loss_kl_avg, loss_avg))
 
         # log everything
         if writer is not None:
@@ -361,14 +361,12 @@ class BVAE(nn.Module):
 
         return loss_avg
 
-    def train_net(self, train_loader, test_loader, loss_rec_fn, loss_kl_fn, optimizer, epochs, scheduler=None,
-                  test_freq=1, augmenter=None, print_stats=1, log_dir=None, write_images_freq=1, device=0):
+    def train_net(self, train_loader, test_loader, optimizer, epochs, scheduler=None, test_freq=1, augmenter=None,
+                  print_stats=1, log_dir=None, write_images_freq=1, device=0):
         """
         Trains the network
         :param train_loader: data loader with training data
         :param test_loader: data loader with testing data
-        :param loss_rec_fn: reconstruction loss function
-        :param loss_kl_fn: kullback leibler loss function
         :param optimizer: optimizer for the loss function
         :param epochs: number of training epochs
         :param scheduler: optional scheduler for learning rate tuning
@@ -391,28 +389,28 @@ class BVAE(nn.Module):
             print_frm('Epoch %5d/%5d' % (epoch, epochs))
 
             # train the model for one epoch
-            self.train_epoch(loader=train_loader, loss_rec_fn=loss_rec_fn, loss_kl_fn=loss_kl_fn, optimizer=optimizer,
-                             epoch=epoch, augmenter=augmenter, print_stats=print_stats, writer=writer,
-                             write_images=epoch % write_images_freq == 0, device=device)
+            self.train_epoch(loader=train_loader, optimizer=optimizer, epoch=epoch, augmenter=augmenter,
+                             print_stats=print_stats, writer=writer, write_images=epoch % write_images_freq == 0,
+                             device=device)
 
             # adjust learning rate if necessary
             if scheduler is not None:
-                scheduler.step(epoch=epoch)
+                scheduler.step()
 
                 # and keep track of the learning rate
-                writer.add_scalar('learning_rate', float(scheduler.get_lr()[0]), epoch)
+                writer.add_scalar('learning_rate', float(scheduler.get_last_lr()[0]), epoch)
 
             # test the model for one epoch is necessary
             if epoch % test_freq == 0:
-                test_loss = self.test_epoch(loader=test_loader, loss_rec_fn=loss_rec_fn, loss_kl_fn=loss_kl_fn,
-                                            epoch=epoch, writer=writer, write_images=True, device=device)
+                test_loss = self.test_epoch(loader=test_loader, epoch=epoch, writer=writer, write_images=True,
+                                            device=device)
 
                 # and save model if lower test loss is found
                 if test_loss < test_loss_min:
                     test_loss_min = test_loss
-                    torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
+                    save_net(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
 
             # save model every epoch
-            torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch'))
+            save_net(self, os.path.join(log_dir, 'checkpoint.pytorch'))
 
         writer.close()
