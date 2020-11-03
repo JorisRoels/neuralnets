@@ -118,20 +118,15 @@ def gaussian_window(size, sigma=1):
     return gw
 
 
-def load_unet(model_file, device=0):
+def load_unet(state_dict, device=0):
     """
-    Load a pretrained pytorch U-Net network
+    Load a pretrained pytorch U-Net state dict
 
-    :param model_file: path to the state dict checkpoint
+    :param state_dict: state dict of a U-Net
     :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
     :return: a module that corresponds to the trained network
     """
     from neuralnets.networks.unet import UNet2D, UNet3D
-
-    if not torch.cuda.is_available() or device == 'cpu':
-        state_dict = torch.load(model_file, map_location='cpu')
-    else:
-        state_dict = torch.load(model_file, map_location='cuda:' + str(device))
 
     # extract the hyperparameters of the network
     in_channels = state_dict['encoder.features.convblock1.conv1.unit.0.weight'].size(1)
@@ -164,15 +159,64 @@ def load_unet(model_file, device=0):
     return net
 
 
+def load_bvae(state_dict, device=0):
+    """
+    Load a pretrained pytorch BVAE state dict
+
+    :param state_dict: state dict of a bvae
+    :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
+    :return: a module that corresponds to the trained network
+    """
+    from neuralnets.networks.bvae import BVAE
+
+    # extract the hyperparameters of the network
+    feature_maps = state_dict['encoder.features.convblock1.conv1.unit.0.weight'].size(0)
+    levels = int(list(state_dict.keys())[-5][len('decoder.features.upconv')])
+    bottleneck_in_features = state_dict['encoder.bottleneck.0.weight'].size(1)
+    bottleneck_dim = state_dict['encoder.bottleneck.0.weight'].size(0) // 2
+    x = int(np.sqrt(bottleneck_in_features * 2**(3*levels - 1) / feature_maps))
+    norm = 'batch' if 'norm' in list(state_dict.keys())[2] else 'instance'
+    beta = 0.0
+    activation = 'relu'
+    dropout_enc = 0.0
+    dropout_dec = 0.0
+
+    # initialize the network
+    net = BVAE(beta=beta, input_size=[x, x], bottleneck_dim=bottleneck_dim, feature_maps=feature_maps,
+               levels=levels, dropout_enc=dropout_enc, dropout_dec=dropout_dec, norm=norm, activation=activation)
+
+    # load the parameters in the model
+    net.load_state_dict(state_dict)
+
+    # map to the correct device
+    module_to_device(net, device=device)
+
+    return net
+
+
 def load_net(model_file, device=0):
     """
-    Load a pretrained pytorch network, currently only support for U-Net
+    Load a pretrained pytorch network, currently only support for U-Net and BVAE
 
     :param model_file: path to the state dict checkpoint
     :param device: index of the device (if there are no GPU devices, it will be moved to the CPU)
     :return: a module that corresponds to the trained network
     """
-    return load_unet(model_file, device=device)
+
+    # load the state dict to the correct device
+    map_location = 'cpu' if not torch.cuda.is_available() or device == 'cpu' else 'cuda:' + str(device)
+    state_dict = torch.load(model_file, map_location=map_location)
+
+    # get parameters of the state dict to identify the network
+    out_channels = state_dict['decoder.output.weight'].size(0)
+
+    net = None
+    if out_channels == 1:  # autoencoder architecture
+        net = load_bvae(state_dict, device=device)
+    elif out_channels > 1:  # U-Net architecture
+        net = load_unet(state_dict, device=device)
+
+    return net
 
 
 def save_net(model, model_file):
