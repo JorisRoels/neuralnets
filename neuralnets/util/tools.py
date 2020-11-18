@@ -21,8 +21,6 @@ def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq
     :param data_shape: (z, x, y) shape of the dataset to sample from (only necessary if preloaded==False)
     :return: a random sample
     """
-    # randomize seed
-    np.random.seed()
 
     # extract input and target patch
     if preloaded:  # if preloaded, we can simply load it from RAM
@@ -58,8 +56,6 @@ def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', dat
     :param data_shape: (z, x, y) shape of the dataset to sample from (only necessary if preloaded==False)
     :return: a random sample
     """
-    # randomize seed
-    np.random.seed()
 
     # extract input and target patch
     if preloaded:  # if preloaded, we can simply load it from RAM
@@ -238,7 +234,6 @@ def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
