@@ -166,12 +166,18 @@ class ContrastAdjust(object):
             r2 = tensor_to_device(torch.rand(1), int(M.device.index))
             m_ = 2 * self.adj * r1 - self.adj + m
             M_ = 2 * self.adj * r2 - self.adj + M
-            x_adj = ((x[:x.size(0) // 2, ...] - m) / (M - m)) * (M_ - m_) + m_
 
             if self.include_segmentation:
+                if m != M:
+                    x_adj = ((x[:x.size(0) // 2, ...] - m) / (M - m)) * (M_ - m_) + m_
+                else:
+                    x_adj = x[:x.size(0) // 2, ...]
                 return torch.cat((x_adj, x[x.size(0) // 2:, ...]), dim=0)
             else:
-                return ((x - m) / (M - m)) * (M_ - m_) + m_
+                if m != M:
+                    return ((x - m) / (M - m)) * (M_ - m_) + m_
+                else:
+                    return x
         else:
             return x
 
