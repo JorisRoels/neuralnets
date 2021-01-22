@@ -245,10 +245,10 @@ def module_to_device(module, device):
     :param module: module that should be transferred
     :param device: index of the device, or 'cpu' (if there are no GPU devices, it will be moved to the CPU)
     """
-    if not torch.cuda.is_available() or device == 'cpu':
-        module.cpu()
+    if torch.cuda.is_available() and (device.__class__ == int or device.__class__ == float):
+        return module.to(device=torch.device('cuda:' + str(int(device))))
     else:
-        module.cuda(device=device)
+        return module.cpu()
 
 
 def tensor_to_device(x, device):
@@ -260,15 +260,15 @@ def tensor_to_device(x, device):
     :return x: same tensor, but switched to device
     """
     if isinstance(x, tuple) or isinstance(x, list):
-        if not torch.cuda.is_available() or device is None:
+        if torch.cuda.is_available() and (device.__class__ == int or device.__class__ == float):
+            return [xx.to(device=torch.device('cuda:' + str(int(device)))) for xx in x]
+        else:
             return [xx.cpu() for xx in x]
-        else:
-            return [xx.cuda(device=torch.device('cuda:' + str(device))) for xx in x]
     else:
-        if not torch.cuda.is_available() or device is None:
-            return x.cpu()
+        if torch.cuda.is_available() and (device.__class__ == int or device.__class__ == float):
+            return x.to(device=torch.device('cuda:' + str(int(device))))
         else:
-            return x.cuda(device=torch.device('cuda:' + str(device)))
+            return x.cpu()
 
 
 def augment_samples(data, augmenter=None):

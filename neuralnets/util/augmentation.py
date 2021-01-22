@@ -162,8 +162,9 @@ class ContrastAdjust(object):
 
             m = x_.min()
             M = x_.max()
-            r1 = tensor_to_device(torch.rand(1), int(m.device.index))
-            r2 = tensor_to_device(torch.rand(1), int(M.device.index))
+            device = None if m.device.index is None else int(m.device.index)
+            r1 = tensor_to_device(torch.rand(1), device)
+            r2 = tensor_to_device(torch.rand(1), device)
             m_ = 2 * self.adj * r1 - self.adj + m
             M_ = 2 * self.adj * r2 - self.adj + M
 
