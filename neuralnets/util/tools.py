@@ -114,6 +114,29 @@ def gaussian_window(size, sigma=1):
     return gw
 
 
+def parse_params(params):
+    """
+    Parse a YAML parameter dictionary
+
+    :param params: dictionary containing the parameters
+    :return: parsed dictionary
+    """
+
+    keys = params.keys()
+
+    if 'input_size' in keys:
+        params['input_size'] = [int(item) for item in params['input_size'].split(',')]
+    if 'classes_of_interest' in keys:
+        params['classes_of_interest'] = [int(c) for c in params['classes_of_interest'].split(',')]
+    if 'orientations' in keys:
+        if type(params['orientations']) is int:
+            params['orientations'] = [params['orientations']]
+        else:
+            params['orientations'] = [int(c) for c in params['orientations'].split(',')]
+
+    return params
+
+
 def load_unet(state_dict, device=0):
     """
     Load a pretrained pytorch U-Net state dict

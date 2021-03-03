@@ -7,8 +7,7 @@ import torch.nn.functional as F
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage import measure
 
-from neuralnets.data.datasets import StronglyLabeledStandardDataset, StronglyLabeledVolumeDataset, \
-    StronglyLabeledMultiVolumeDataset
+from neuralnets.data.datasets import LabeledStandardDataset, LabeledVolumeDataset, LabeledMultiVolumeDataset
 
 from neuralnets.util.tools import tensor_to_device
 
@@ -420,19 +419,19 @@ def get_balancing_weights(dataset):
     Returns a set of balancing weights for a specific labeled dataset
 
     :param dataset: labeled dataset instance of
-                        - neuralnets.data.datasets.StronglyLabeledStandardDataset
-                        - neuralnets.data.datasets.StronglyLabeledVolumeDataset
-                        - neuralnets.data.datasets.StronglyLabeledMultiVolumeDataset
+                        - neuralnets.data.datasets.LabeledStandardDataset
+                        - neuralnets.data.datasets.LabeledVolumeDataset
+                        - neuralnets.data.datasets.LabeledMultiVolumeDataset
     :return: a tuple of balancing weights, if an unsuitable object is provided, it returns None
     """
 
-    if isinstance(dataset, StronglyLabeledStandardDataset) or isinstance(dataset, StronglyLabeledVolumeDataset):
+    if isinstance(dataset, LabeledStandardDataset) or isinstance(dataset, LabeledVolumeDataset):
         weight = np.zeros((len(dataset.coi)))
         for i, c in enumerate(dataset.coi):
             weight[i] = 1 / np.count_nonzero(dataset.labels == c)
         weight = weight / np.sum(weight)
         return tuple(weight)
-    elif isinstance(dataset, StronglyLabeledMultiVolumeDataset):
+    elif isinstance(dataset, LabeledMultiVolumeDataset):
         freq = np.zeros((len(dataset.coi)))
         for i, c in enumerate(dataset.coi):
             for labels in dataset.labels:

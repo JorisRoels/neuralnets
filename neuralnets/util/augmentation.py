@@ -1,71 +1,67 @@
-import cv2
 import numpy as np
 import numpy.random as rnd
 import torch
-import torch.nn.functional as F
-from scipy.ndimage import spline_filter1d, zoom
+from torchvision.transforms import Compose
+from elasticdeform import deform_random_grid
+from skimage.transform import resize, rotate
 
-from neuralnets.util.tools import tensor_to_device
+
+def filter_valid_segmentation_transforms(transforms, coi=None):
+    """
+    Filters the transforms that are valid to apply during segmentation
+
+    :param transforms: transform object (Compose)
+    :param coi: if provided, a label cleaning transform will be attached at the end (optional)
+    :return: subset of transforms (Compose)
+    """
+
+    if transforms is not None:
+        valid_transforms = []
+        for transform in transforms.transforms:
+            if transform.__class__ != AddNoise and transform.__class__ != Normalize and \
+                    transform.__class__ != ContrastAdjust:
+                valid_transforms.append(transform)
+        if coi is not None:
+            valid_transforms.append(CleanDeformedLabels(coi))
+        return Compose(valid_transforms)
+    else:
+        return None
 
 
 class ToTensor(object):
     """
     Transforms a numpy array into a tensor
 
-    :param initialization device: GPU device where the computations should occur
     :param forward x: input array (N_1, N_2, N_3, ...)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, device=0):
-        self.device = device
-
     def __call__(self, x):
-        return tensor_to_device(torch.Tensor(x), device=self.device)
+        return torch.from_numpy(x)
 
 
-class ToFloatTensor(object):
+class ToFloat(object):
     """
     Transforms a Tensor to a FloatTensor
 
-    :param initialization device: GPU device where the computations should occur
     :param forward x: input array (N_1, N_2, N_3, ...)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, device=0):
-        self.device = device
-
     def __call__(self, x):
-        return tensor_to_device(x.float(), device=self.device)
+        return x.float()
 
 
-class ToLongTensor(object):
+class ToLong(object):
     """
     Transforms a Tensor to a LongTensor
 
-    :param initialization device: GPU device where the computations should occur
     :param forward x: input array (N_1, N_2, N_3, ...)
     :return: output tensor (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, device=0):
-        self.device = device
-
     def __call__(self, x):
-        return tensor_to_device(x.long(), device=self.device)
-
-
-class AddChannelAxis(object):
-    """
-    Add a channel to the input tensor
-
-    :param forward x: input tensor (N_1, N_2, N_3, ...)
-    :return: output tensor (N_1, N_2, N_3, ...)
-    """
-
-    def __call__(self, x):
-        return x.unsqueeze(0)
+        return x.long(),
 
 
 class AddNoise(object):
@@ -75,29 +71,20 @@ class AddNoise(object):
     :param initialization prob: probability of adding noise
     :param initialization sigma_min: minimum noise standard deviation
     :param initialization sigma_max: maximum noise standard deviation
-    :param initialization include_segmentation: 2nd half of the batch will not be augmented as this is assumed to be a (partial) segmentation
-    :param forward x: input tensor (B, N_1, N_2, ...)
-    :return: output tensor (B, N_1, N_2, ...)
+    :param forward x: input array (N_1, N_2, ...)
+    :return: output array (N_1, N_2, ...)
     """
 
-    def __init__(self, prob=0.5, sigma_min=0.0, sigma_max=1.0, include_segmentation=False):
+    def __init__(self, prob=0.5, sigma_min=0.0, sigma_max=1.0):
         self.prob = prob
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
-        self.include_segmentation = include_segmentation
 
     def __call__(self, x):
 
         if rnd.rand() < self.prob:
             sigma = rnd.uniform(self.sigma_min, self.sigma_max)
-            if self.include_segmentation:
-                sz = np.asarray(x.size())
-                sz[0] = sz[0] // 2
-                sz = tuple(sz)
-                noise = torch.cat((torch.normal(0, sigma, sz), torch.zeros(sz)), dim=0)
-            else:
-                noise = torch.normal(0, sigma, x.size())
-            noise = tensor_to_device(noise, device=x.device.index)
+            noise = rnd.randn(*x.shape) * sigma
             return x + noise
         else:
             return x
@@ -111,7 +98,8 @@ class Normalize(object):
     :param optional bits: number of bits used to represent a pixel value (only if type is unit)
     :param optional mu: normalization mean (only if type is z)
     :param optional sigma: normalization std (only if type is z)
-    :return: output tensor (N_1, N_2, N_3, ...)
+    :param forward x: input array (N_1, N_2, ...)
+    :return: output array (N_1, N_2, N_3, ...)
     """
 
     def __init__(self, type='unit', bits=8, mu=None, sigma=None):
@@ -123,8 +111,8 @@ class Normalize(object):
     def __call__(self, x):
         if self.type == 'minmax':
             # apply minmax normalization
-            m = x.min()
-            M = x.max()
+            m = np.min(x)
+            M = np.max(x)
             eps = 1e-5
             return (x - m + eps) / (M - m + eps)
         elif self.type == 'unit':
@@ -132,8 +120,8 @@ class Normalize(object):
             return x / (2**self.bits)
         else:
             # apply z normalization
-            mu = torch.mean(x) if self.mu is None else self.mu
-            sigma = torch.std(x) if self.sigma is None else self.sigma
+            mu = np.mean(x) if self.mu is None else self.mu
+            sigma = np.std(x) if self.sigma is None else self.sigma
             return (x - mu) / sigma
 
 
@@ -143,42 +131,30 @@ class ContrastAdjust(object):
 
     :param initialization prob: probability of adjusting contrast
     :param initialization adj: maximum adjustment (maximum intensity shift for minimum and maximum the new histogram)
-    :param initialization include_segmentation: 2nd half of the batch will not be augmented as this is assumed to be a (partial) segmentation
-    :param forward x: input tensor (N_1, N_2, N_3, ...)
-    :return: output tensor (N_1, N_2, N_3, ...)
+    :param forward x: input array (N_1, N_2, N_3, ...)
+    :return: output array (N_1, N_2, N_3, ...)
     """
 
-    def __init__(self, prob=1, adj=0.2, include_segmentation=False):
+    def __init__(self, prob=1, adj=0.1):
         self.prob = prob
         self.adj = adj
-        self.include_segmentation = include_segmentation
 
     def __call__(self, x):
 
         if rnd.rand() < self.prob:
             x_ = x
-            if self.include_segmentation:
-                x_ = x[:x.size(0) // 2, ...]
 
-            m = x_.min()
-            M = x_.max()
-            device = None if m.device.index is None else int(m.device.index)
-            r1 = tensor_to_device(torch.rand(1), device)
-            r2 = tensor_to_device(torch.rand(1), device)
+            m = np.min(x_)
+            M = np.max(x_)
+            r1 = rnd.rand()
+            r2 = rnd.rand()
             m_ = 2 * self.adj * r1 - self.adj + m
             M_ = 2 * self.adj * r2 - self.adj + M
 
-            if self.include_segmentation:
-                if m != M:
-                    x_adj = ((x[:x.size(0) // 2, ...] - m) / (M - m)) * (M_ - m_) + m_
-                else:
-                    x_adj = x[:x.size(0) // 2, ...]
-                return torch.cat((x_adj, x[x.size(0) // 2:, ...]), dim=0)
+            if m != M:
+                return ((x - m) / (M - m)) * (M_ - m_) + m_
             else:
-                if m != M:
-                    return ((x - m) / (M - m)) * (M_ - m_) + m_
-                else:
-                    return x
+                return x
         else:
             return x
 
@@ -187,83 +163,44 @@ class Scale(object):
     """
     Scales the input by a specific factor (randomly selected from a minimum-maximum range)
 
-    :param initialization scale_factor: minimum and maximum scaling factor
-    :param forward x: input tensor (B, C, [Z  , Y  ,] X)
-    :return: output tensor (B, C, [Z' , Y' ,] X)
+    :param initialization dsize: target size [Z' ,] Y' , X'
+    :param initialization mode: padding type (‘constant’, ‘edge’, ‘symmetric’, ‘reflect’, ‘wrap’)
+    :param forward x: input array (C, [Z  ,] Y  , X)
+    :return: output tensor (C, [Z' ,] Y' , X')
     """
 
-    def __init__(self, scale_factor=(0.5, 1.5), mode='bilinear'):
-        self.scale_factor = scale_factor
+    def __init__(self, dsize, mode='edge'):
+        self.dsize = dsize
         self.mode = mode
 
     def __call__(self, x):
-        if type(self.scale_factor) == tuple:
-            scale_factor = (self.scale_factor[1] - self.scale_factor[0]) * np.random.random_sample() + \
-                           self.scale_factor[0]
-        else:
-            scale_factor = self.scale_factor
-        return F.interpolate(x, scale_factor=scale_factor, mode=self.mode, align_corners=False)
+        x_ = np.zeros_like(x)
+        for c in range(x.shape[0]):
+            x_[c] = resize(x[c], self.dsize, mode=self.mode)
+        return x_
 
 
-class FlipX(object):
+class Flip(object):
     """
-    Perform a flip along the X axis
+    Perform a flip along a specific dimension
 
     :param initialization prob: probability of flipping
-    :param forward x: input tensor (B, C, N_1, N_2, ...)
-    :return: output tensor (B, C, N_1, N_2, ...)
+    :param initialization dim: (spatial) dimension to flip (excluding the channel dimension, default flips last dim)
+    :param forward x: input array (C, N_1, N_2, ...)
+    :return: output array (C, N_1, N_2, ...)
     """
 
-    def __init__(self, prob=1):
+    def __init__(self, prob=0.5, dim=None):
         self.prob = prob
+        if dim is None:
+            self.dim = -1
+        else:
+            self.dim = dim + 1
 
     def __call__(self, x):
 
         if rnd.rand() < self.prob:
-            n = x.ndimension()
-            return torch.flip(x, dims=[n - 1])
-        else:
-            return x
-
-
-class FlipY(object):
-    """
-    Perform a flip along the Y axis
-
-    :param initialization prob: probability of flipping
-    :param forward x: input tensor (B, C, N_1, N_2, ...)
-    :return: output tensor (B, C, N_1, N_2, ...)
-    """
-
-    def __init__(self, prob=1):
-        self.prob = prob
-
-    def __call__(self, x):
-
-        if rnd.rand() < self.prob:
-            n = x.ndimension()
-            return torch.flip(x, dims=[n - 2])
-        else:
-            return x
-
-
-class FlipZ(object):
-    """
-    Perform a flip along the Z axis
-
-    :param initialization prob: probability of flipping
-    :param forward x: input tensor (B, C, N_1, N_2, ...)
-    :return: output tensor (B, C, N_1, N_2, ...)
-    """
-
-    def __init__(self, prob=1):
-        self.prob = prob
-
-    def __call__(self, x):
-
-        if rnd.rand() < self.prob:
-            n = x.ndimension()
-            return torch.flip(x, dims=[n - 3])
+            return np.flip(x, axis=self.dim).copy()
         else:
             return x
 
@@ -273,8 +210,8 @@ class Rotate90(object):
     Rotate the inputs by 90 degree angles
 
     :param initialization prob: probability of rotating
-    :param forward x: input tensor (B, C, N_1, N_2, ...)
-    :return: output tensor (B, C, N_1, N_2, ...)
+    :param forward x: input array (C, N_1, N_2, ...)
+    :return: output array (C, N_1, N_2, ...)
     """
 
     def __init__(self, prob=1):
@@ -283,285 +220,112 @@ class Rotate90(object):
     def __call__(self, x):
 
         if rnd.rand() < self.prob:
-            n = x.ndimension()
-            return torch.rot90(x, k=rnd.randint(0, 4), dims=[n - 2, n - 1])
+            n = x.ndim
+            return np.rot90(x, k=rnd.randint(0, 4), axes=[n - 2, n - 1]).copy()
         else:
             return x
 
 
-class RotateRandom_2D(object):
+class RotateRandom(object):
     """
     Rotate the inputs by a random amount of degrees within interval.
 
-    :param initialization shape: 2D shape of the input image
-    :param initialization rng: random degree interval size (symmetric around 0)
-    :param initialization device: GPU device where the computations should occur
-    :param forward x: input tensor (B, C, Y , X)
-    :return: output tensor (B, C, Y , X)
+    :param initialization angle: max rotation angle (sampled symmetrically around 0)
+    :param initialization resize: resize to fit
+    :param initialization mode: padding type (‘constant’, ‘edge’, ‘symmetric’, ‘reflect’, ‘wrap’)
+    :param forward x: input array (C, [Z ,] Y , X)
+    :return: output array (C, [Z ,] Y , X)
     """
 
-    def __init__(self, shape, prob=1.0, rng=200, device=0):
-        self.shape = tuple(shape)
-        self.device = device
-        self.rng = int(rng / 2)
+    def __init__(self, prob=1.0, angle=30, resize=False, mode='edge'):
         self.prob = prob
-        self.image_center = int(self.shape[0] / 2), int(self.shape[1] / 2)
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        self.xv, self.yv = np.meshgrid(i, j)
-
-    def _rotation_grid(self):
-        angle = np.random.randint(-self.rng, self.rng)
-        rot_matrix = cv2.getRotationMatrix2D(self.image_center, angle, 1.0)
-        xv = cv2.warpAffine(self.xv, rot_matrix, self.xv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
-        yv = cv2.warpAffine(self.yv, rot_matrix, self.yv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
-
-        grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
-        return grid
+        self.angle = angle
+        self.resize = resize
+        self.mode = mode
 
     def __call__(self, x):
 
         if rnd.rand() < self.prob:
-            grid = self._rotation_grid()
-            grid = grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid, align_corners=False)
+            angle = - self.angle + rnd.rand() * 2 * self.angle
+            x_ = np.zeros_like(x)
+            for c in range(x.shape[0]):
+                x_[c] = rotate(x[c], angle, resize=self.resize, mode=self.mode)
+            return x_
         else:
             return x
 
 
-class RotateRandom_3D(object):
-    """
-    Rotate the inputs by a random amount of degrees within interval.
-
-    :param initialization shape: 3D shape of the input image
-    :param initialization rng: random degree interval size (symmetric around 0)
-    :param initialization device: GPU device where the computations should occur
-    :param forward x: input tensor (B, C, Z, Y , X)
-    :return: output tensor (B, C, Z, Y , X)
-    """
-
-    def __init__(self, shape, prob=1.0, rng=200, device=0):
-        self.shape = tuple(shape)
-        self.device = device
-        self.rng = int(rng / 2)
-        self.prob = prob
-        self.image_center = int(self.shape[0] / 2), int(self.shape[1] / 2), int(self.shape[2] / 2)
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        k = np.linspace(-1, 1, shape[2])
-        self.xv, self.yv, self.zv = np.meshgrid(i, j, k)
-
-    def _rotation_grid(self):
-        angle = np.random.randint(-self.rng, self.rng)
-        rot_matrix = cv2.getRotationMatrix2D(self.image_center, angle, 1.0)
-        xv = cv2.warpAffine(self.xv, rot_matrix, self.xv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
-        yv = cv2.warpAffine(self.yv, rot_matrix, self.yv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
-        zv = cv2.warpAffine(self.zv, rot_matrix, self.zv.shape[1::-1], flags=cv2.INTER_CUBIC, borderValue=2)
-
-        grid = torch.cat(
-            (torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1), torch.Tensor(zv).unsqueeze(-1)), dim=-1)
-        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
-        return grid
-
-    def __call__(self, x):
-
-        if rnd.rand() < self.prob:
-            grid = self._rotation_grid()
-            grid = grid.repeat_interleave(x.size(0), dim=0)
-            return F.grid_sample(x, grid, align_corners=False)
-        else:
-            return x
-
-
-class RandomCrop_2D(object):
+class RandomCrop(object):
     """
     Selects a random crop from the input
 
-    :param initialization crop_shape: 2D shape of the crop
-    :param forward x: input tensor (B, C, Y , X)
-    :return: output tensor (B, C, Y', X')
+    :param initialization crop_shape: shape of the crop [Z' ,] Y' , X'
+    :param forward x: input array (C, [Z ,] Y , X)
+    :return: output tensor (C, [Z' ,] Y' , X')
     """
 
     def __init__(self, crop_shape):
         self.crop_shape = crop_shape
 
     def __call__(self, x):
-        r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
-        c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
-        return x[:, :, r:r + self.crop_shape[0], c:c + self.crop_shape[1]]
+        z_ = np.random.randint(0, x.size(1) - self.crop_shape[0] + 1)
+        y_ = np.random.randint(0, x.size(2) - self.crop_shape[1] + 1)
+        if len(self.crop_shape) == 2:  # 2D
+            return x[:, z_:z_ + self.crop_shape[0], y_:y_ + self.crop_shape[1]]
+        else:  # 3D
+            x_ = np.random.randint(0, x.size(3) - self.crop_shape[2] + 1)
+            return x[:, z_:z_ + self.crop_shape[0], y_:y_ + self.crop_shape[1], x_:x_ + self.crop_shape[2]]
 
 
-class RandomCrop_3D(object):
-    """
-    Selects a random crop from the input
-
-    :param initialization crop_shape: 3D shape of the crop
-    :param forward x: input tensor (B, C, Z, Y , X)
-    :return: output tensor (B, C, Z', Y', X')
-    """
-
-    def __init__(self, crop_shape):
-        self.crop_shape = crop_shape
-
-    def __call__(self, x):
-        r = np.random.randint(0, x.size(2) - self.crop_shape[0] + 1)
-        c = np.random.randint(0, x.size(3) - self.crop_shape[1] + 1)
-        z = np.random.randint(0, x.size(4) - self.crop_shape[2] + 1)
-        return x[:, :, r:r + self.crop_shape[0], c:c + self.crop_shape[1], z:z + self.crop_shape[2]]
-
-
-class RandomDeformation_2D(object):
+class RandomDeformation(object):
     """
     Apply random deformation to the inputs
 
-    :param initialization shape: shape of the inputs
     :param initialization prob: probability of deforming the data
-    :param initialization device: GPU device where the computations should occur
-    :param initialization points: seed points for deformation
-    :param initialization grid_size: tuple with number of pixels between each grid point
-    :param initialization n_grids: number of grids to load in advance (chose more for higher variance in the data)
-    :param initialization include_segmentation: 2nd half of the batch needs casting to integers because of warping
-    :param forward x: input tensor (B, C, Y , X)
-    :return: output tensor (B, C, Y, X)
+    :param initialization sigma: standard deviation of the normal deformation distribution
+    :param initialization points: number of points of the deformation grid
+    :param initialization mode: padding type (‘constant’, ‘edge’, ‘symmetric’, ‘reflect’, ‘wrap’)
+    :param forward x: input array (C, [Z ,] Y , X)
+    :return: output tensor (C, [Z ,] Y , X)
     """
 
-    def __init__(self, shape, prob=1, device=0, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
-                 include_segmentation=False):
-        self.shape = shape
+    def __init__(self, prob=1, sigma=10, points=5, mode='nearest'):
         self.prob = prob
-        self.device = device
-        self.grid_size = grid_size
-        if points == None:
-            points = [shape[0] // self.grid_size[0], shape[1] // self.grid_size[1]]
-        self.points = points
         self.sigma = sigma
-        self.n_grids = n_grids
-        self.grids = []
-        self.include_segmentation = include_segmentation
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        xv, yv = np.meshgrid(i, j)
-
-        grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
-        self.grid = grid
-
-        # generate several random grids in advance (less CPU work)
-        for i in range(self.n_grids):
-            self.grids.append(self._deformation_grid())
-
-    def _deformation_grid(self):
-        sigma = np.random.rand() * self.sigma
-        displacement = np.random.randn(*self.points, 2) * sigma
-
-        # filter the displacement
-        displacement_f = np.zeros_like(displacement)
-        for d in range(0, displacement.ndim - 1):
-            spline_filter1d(displacement, axis=d, order=3, output=displacement_f, mode='nearest')
-            displacement = displacement_f
-
-        # resample to proper size
-        displacement_f = np.zeros((self.shape[0], self.shape[1], 2))
-        for d in range(0, displacement.ndim - 1):
-            displacement_f[:, :, d] = zoom(displacement[:, :, d], self.grid_size)
-
-        displacement = tensor_to_device(torch.Tensor(displacement_f).unsqueeze(0), device=self.device)
-        grid = self.grid + displacement
-
-        return grid
+        self.points = points
+        self.mode = mode
 
     def __call__(self, x):
 
         if rnd.rand() < self.prob:
-            grid = self.grids[rnd.randint(self.n_grids)]
-            if x.size()[2:4] != grid.size()[1:3]:  # reshape grid if necessary
-                grid = F.interpolate(grid.permute(0, 3, 1, 2), x.size()[2:4]).permute(0, 2, 3, 1)
-            grid = grid.repeat_interleave(x.size(0), dim=0)
-            x_aug = F.grid_sample(x, grid, padding_mode="border", align_corners=False)
-            if self.include_segmentation:
-                x_aug[x.size(0) // 2:, ...] = torch.round(x_aug[x.size(0) // 2:, ...])
-            return x_aug
+            if x.ndim == 3:  # 2D
+                return deform_random_grid(x, sigma=self.sigma, points=self.points, axis=(1, 2), mode=self.mode)
+            else:  # 3D
+                return deform_random_grid(x, sigma=self.sigma, points=self.points, axis=(1, 2, 3), mode=self.mode)
         else:
             return x
 
 
-class RandomDeformation_3D(object):
+class CleanDeformedLabels(object):
     """
-    Apply random deformation to the inputs
+    Clean the deformed labels by mapping the floating point values to nearest integers
 
-    :param initialization shape: shape of the inputs
-    :param initialization prob: probability of deforming the data
-    :param initialization device: GPU device where the computations should occur
-    :param initialization points: seed points for deformation
-    :param initialization grid_size: tuple with number of pixels between each grid point
-    :param initialization n_grids: number of grids to load in advance (chose more for higher variance in the data)
-    :param initialization include_segmentation: 2nd half of the batch needs casting to integers because of warping
-    :param forward x: input tensor (B, C, Z, Y , X)
-    :return: output tensor (B, C, Z, Y, X)
+    :param initialization coi: classes of interest
+    :param forward x: input array (C, [Z ,] Y , X)
+    :return: output tensor (C, [Z ,] Y , X)
     """
 
-    def __init__(self, shape, prob=1, device=0, points=None, grid_size=(64, 64), sigma=0.01, n_grids=1000,
-                 include_segmentation=False):
-        self.shape = shape
-        self.prob = prob
-        self.device = device
-        self.grid_size = grid_size
-        if points == None:
-            points = [shape[0] // self.grid_size[0], shape[1] // self.grid_size[1]]
-        self.points = points
-        self.sigma = sigma
-        self.n_grids = n_grids
-        self.grids = []
-        self.include_segmentation = include_segmentation
-
-        i = np.linspace(-1, 1, shape[0])
-        j = np.linspace(-1, 1, shape[1])
-        xv, yv = np.meshgrid(i, j)
-
-        grid = torch.cat((torch.Tensor(xv).unsqueeze(-1), torch.Tensor(yv).unsqueeze(-1)), dim=-1)
-        grid = tensor_to_device(grid.unsqueeze(0), device=self.device)
-        self.grid = grid
-
-        # generate several random grids in advance (less CPU work)
-        for i in range(self.n_grids):
-            self.grids.append(self._deformation_grid())
-
-    def _deformation_grid(self):
-        sigma = np.random.rand() * self.sigma
-        displacement = np.random.randn(*self.points, 2) * sigma
-
-        # filter the displacement
-        displacement_f = np.zeros_like(displacement)
-        for d in range(0, displacement.ndim - 1):
-            spline_filter1d(displacement, axis=d, order=3, output=displacement_f, mode='nearest')
-            displacement = displacement_f
-
-        # resample to proper size
-        displacement_f = np.zeros((self.shape[0], self.shape[1], 2))
-        for d in range(0, displacement.ndim - 1):
-            displacement_f[:, :, d] = zoom(displacement[:, :, d], self.grid_size)
-
-        displacement = tensor_to_device(torch.Tensor(displacement_f).unsqueeze(0), device=self.device)
-        grid = self.grid + displacement
-
-        return grid
+    def __init__(self, coi):
+        self.coi = coi
 
     def __call__(self, x):
 
-        if rnd.rand() < self.prob:
-            grid = self.grids[rnd.randint(self.n_grids)]
-            if x.size()[3:5] != grid.size()[1:3]:  # reshape grid if necessary
-                grid = F.interpolate(grid.permute(0, 3, 1, 2), x.size()[3:5]).permute(0, 2, 3, 1)
-            grid = grid.repeat_interleave(x.size(0) * x.size(2), dim=0)
-            x_aug = F.grid_sample(torch.reshape(x, (x.size(0) * x.size(2), x.size(1), x.size(3), x.size(4))), grid,
-                                  padding_mode="border", align_corners=False)
-            x_aug = torch.reshape(x_aug, x.size())
-            if self.include_segmentation:
-                x_aug[x.size(0) // 2:, ...] = torch.round(x_aug[x.size(0) // 2:, ...])
-            return x_aug
-        else:
-            return x
+        d = np.zeros((len(self.coi), *x.shape), dtype=x.dtype)
+        for i, c in enumerate(self.coi):
+            d[i] = np.abs(x - c)
+        d = np.argmin(d, axis=0)
+
+        for i, c in enumerate(self.coi):
+            x[d == i] = c
+
+        return x

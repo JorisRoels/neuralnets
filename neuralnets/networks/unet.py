@@ -4,11 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 import datetime
+import pytorch_lightning as pl
+from pytorch_lightning.metrics.functional import iou
 
 from neuralnets.networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
 from neuralnets.util.io import print_frm
 from neuralnets.util.metrics import jaccard, accuracy_metrics
 from neuralnets.util.tools import *
+from neuralnets.util.augmentation import *
+from neuralnets.util.losses import CrossEntropyLoss
 
 
 class UNetEncoder(nn.Module):
@@ -527,6 +531,97 @@ class UNet2D(UNet):
 
         # adjust output channels
         self.decoder.output = nn.Conv2d(self.feature_maps, self.out_channels, kernel_size=1)
+
+
+class LITUNet2D(pl.LightningModule):
+
+    def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4, skip_connections=True, norm='instance',
+                 activation='relu', dropout_enc=0.0, dropout_dec=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3):
+        super().__init__()
+
+        # parameters
+        self.input_shape = input_shape
+        self.in_channels = in_channels
+        self.c = in_channels // 2
+        self.coi = coi
+        self.out_channels = len(coi)
+        self.feature_maps = feature_maps
+        self.levels = levels
+        self.norm = norm
+        self.dropout_enc = dropout_enc
+        self.dropout_dec = dropout_dec
+        self.activation = activation
+        self.loss_fn = loss_fn
+        self.lr = lr
+
+        # contractive path
+        self.encoder = UNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
+                                     dropout=dropout_enc, activation=activation)
+        # expansive path
+        self.decoder = UNetDecoder2D(self.out_channels, feature_maps=feature_maps, levels=levels,
+                                     skip_connections=skip_connections, norm=norm, dropout=dropout_dec,
+                                     activation=activation)
+
+    def forward(self, x):
+
+        # contractive path
+        encoder_outputs, final_output = self.encoder(x)
+
+        # expansive path
+        decoder_outputs, outputs = self.decoder(final_output, encoder_outputs)
+
+        return outputs
+
+    def training_step(self, batch, batch_idx):
+
+        # transfer to suitable device and get labels
+        x, y = batch
+
+        # forward prop
+        y_pred = self(x)
+
+        # compute loss
+        loss = self.loss_fn(y_pred, y[:, 0, ...], mask=(y != 255))
+
+        # compute iou
+        train_iou = iou(torch.softmax(y_pred, dim=1), y)
+        self.log('train_iou', train_iou, prog_bar=True)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+
+        # transfer to suitable device and get labels
+        x, y = batch
+
+        # forward prop
+        y_pred = self(x)
+
+        # compute loss
+        loss = self.loss_fn(y_pred, y[:, 0, ...], mask=(y != 255))
+
+        # compute iou
+        val_iou = iou(torch.softmax(y_pred, dim=1), y)
+        self.log('val_iou', val_iou, prog_bar=True)
+
+        return loss
+
+    def test_step(self, batch, batch_idx):
+
+        # transfer to suitable device and get labels
+        x, y = batch
+
+        # forward prop
+        y_pred = self(x)
+
+        # compute loss
+        loss = self.loss_fn(y_pred, y[:, 0, ...], mask=(y != 255))
+
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        return optimizer
 
 
 class UNetEncoder3D(UNetEncoder):

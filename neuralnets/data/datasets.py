@@ -1,10 +1,16 @@
 import numpy as np
+import warnings
 import torch
 import torch.nn.functional as F
 import torch.utils.data as data
 
 from neuralnets.util.io import read_volume
-from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, normalize
+from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, normalize, set_seed
+from neuralnets.util.augmentation import filter_valid_segmentation_transforms
+
+
+MAX_SAMPLING_ATTEMPTS = 20
+LARGE_VALUE = 10000000
 
 
 def _orient(data, orientation=0):
@@ -106,7 +112,7 @@ class StandardDataset(data.Dataset):
         return mu, std
 
 
-class StronglyLabeledStandardDataset(StandardDataset):
+class LabeledStandardDataset(StandardDataset):
     """
     Strongly labeled dataset of N 2D images and pixel-wise labels
 
@@ -237,7 +243,7 @@ class VolumeDataset(data.Dataset):
         self.orientation = np.random.choice(self.orientations)
 
 
-class StronglyLabeledVolumeDataset(VolumeDataset):
+class LabeledVolumeDataset(VolumeDataset):
     """
     Dataset for pixel-wise labeled volumes
 
@@ -254,17 +260,21 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
     :param optional data_dtype: type of the data (typically uint8)
     :param optional label_dtype: type of the labels (typically uint8)
     :param optional norm_type: type of the normalization (unit, z or minmax)
+    :param optional transform: augmenter object
     """
 
     def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
-                 norm_type='unit'):
+                 norm_type='unit', transform=None):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
                          in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
                          norm_type=norm_type)
 
         self.label_path = label_path
         self.coi = coi
+        self.x_transform = transform
+        self.y_transform = filter_valid_segmentation_transforms(transform, coi=coi)
+        self.seed = 0
 
         # load labels
         self.labels = read_volume(label_path, type=type, dtype=label_dtype)
@@ -277,7 +287,7 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
 
         self.mu, self.std = self._get_stats()
 
-    def __getitem__(self, i):
+    def __getitem__(self, i, attempt=0):
 
         # reorient when we start a new batch
         if i % self.batch_size == 0:
@@ -288,22 +298,39 @@ class StronglyLabeledVolumeDataset(VolumeDataset):
                                       orientation=self.orientation)
 
         # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, input_shape)
-        input = normalize(input, type=self.norm_type)
+        x, y = sample_labeled_input(self.data, self.labels, input_shape)
+        x = normalize(x, type=self.norm_type)
+        y = y.astype(float)
 
         # reorient sample
-        input = _orient(input, orientation=self.orientation)
-        target = _orient(target, orientation=self.orientation)
+        x = _orient(x, orientation=self.orientation)
+        y = _orient(y, orientation=self.orientation)
 
+        # add channel axis if the data is 3D
         if self.input_shape[0] > 1:
-            # add channel axis if the data is 3D
-            input, target = input[np.newaxis, ...], target[np.newaxis, ...]
+            x, y = x[np.newaxis, ...], y[np.newaxis, ...]
 
-        if len(np.intersect1d(np.unique(target),
-                              self.coi)) == 0:  # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
-            return self.__getitem__(i)
-        else:
-            return input, target
+        # augment sample
+        if self.x_transform is not None:
+            set_seed(seed=self.seed)
+            x = self.x_transform(x)
+            set_seed(seed=self.seed)
+            y = self.y_transform(y)
+            self.seed = np.mod(self.seed + 1, LARGE_VALUE)
+
+        # transform to tensors
+        x = torch.from_numpy(x).float()
+        y = torch.from_numpy(y).long()
+
+        # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(torch.unique(y).numpy(), self.coi)) == 0:
+            if attempt < MAX_SAMPLING_ATTEMPTS:
+                x, y = self.__getitem__(i, attempt=attempt + 1)
+            else:
+                warnings.warn("No labeled pixels found after %d sampling attempts! ")
+
+        # return sample
+        return x, y
 
 
 class UnlabeledVolumeDataset(VolumeDataset):
@@ -429,7 +456,7 @@ class MultiVolumeDataset(data.Dataset):
             self.k = np.random.choice(len(self.data), p=self.data_sizes)
 
 
-class StronglyLabeledMultiVolumeDataset(MultiVolumeDataset):
+class LabeledMultiVolumeDataset(MultiVolumeDataset):
     """
     Dataset for multiple pixel-wise labeled volumes
 
