@@ -133,6 +133,11 @@ def parse_params(params):
             params['orientations'] = [params['orientations']]
         else:
             params['orientations'] = [int(c) for c in params['orientations'].split(',')]
+    if 'gpus' in keys:
+        if type(params['gpus']) is int:
+            params['gpus'] = [params['gpus']]
+        else:
+            params['gpus'] = [int(c) for c in params['gpus'].split(',')]
 
     return params
 

@@ -72,7 +72,9 @@ if __name__ == '__main__':
         Train the network
     """
     print_frm('Starting training')
-    trainer = pl.Trainer(max_epochs=params['epochs'], gpus=params['gpus'])
+    trainer = pl.Trainer(max_epochs=params['epochs'], gpus=params['gpus'], accelerator=params['accelerator'],
+                         default_root_dir=params['log_dir'], flush_logs_every_n_steps=params['log_freq'],
+                         log_every_n_steps=params['log_freq'])
     trainer.fit(net, train_loader, val_loader)
 
     # """

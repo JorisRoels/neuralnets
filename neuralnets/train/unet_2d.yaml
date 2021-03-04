@@ -11,11 +11,11 @@ test_data: /home/jorisro/research/data/EM/EPFL/test
 test_labels: /home/jorisro/research/data/EM/EPFL/test_labels
 data_type: pngseq
 # network config
-input_size: 256,256
-fm: 16
+input_size: 512,512
+fm: 64
 levels: 4
 dropout: 0.00
-norm: instance
+norm: batch
 activation: relu
 in_channels: 1
 classes_of_interest: 0,1
@@ -31,10 +31,11 @@ test_freq: 1
 train_batch_size: 4
 test_batch_size: 4
 # compute config
-gpus: 1
-num_workers: 4
+gpus: 0
+num_workers: 16
+accelerator: dp
 # logging config
 log_dir: unet_2d
-print_stats: 50
+log_freq: 50
 # remaining
 seed: 0
