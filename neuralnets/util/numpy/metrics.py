@@ -2,15 +2,15 @@ import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 
 
-def _jaccard_part_metrics(y_true, y_pred, w=None, max_elements=1000000):
+def _iou_part_metrics(y_true, y_pred, w=None, max_elements=1000000):
     """
-    computes the confusion matrix metrics in a memory efficient way
+    computes the partial iou metrics in a memory efficient way
 
     :param y_true: (N1, N2, ...) array of the true labels
     :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
     :param w: (N1, N2, ...) masking array
     :param max_elements: maximum number of elements for block based computing
-    :return: the Jaccard index, accuracy, balanced accuracy, precision, recall and f1-score
+    :return: intersection, true_total, pred_total
     """
 
     # flatten, apply masking if necessary and binarize
@@ -45,9 +45,9 @@ def _jaccard_part_metrics(y_true, y_pred, w=None, max_elements=1000000):
     return intersection, true_total, pred_total
 
 
-def jaccard(y_true, y_pred, w=None):
+def iou(y_true, y_pred, w=None):
     """
-    Jaccard index between two segmentations
+    Intersection-over-union metric
 
     :param y_true: (N1, N2, ...) array of the true labels
     :param y_pred: (N1, N2, ...) array of the predictions (either probs or binary)
@@ -56,7 +56,7 @@ def jaccard(y_true, y_pred, w=None):
     """
 
     # compute jaccard score
-    intersection, true_total, pred_total = _jaccard_part_metrics(y_true, y_pred, w=w)
+    intersection, true_total, pred_total = _iou_part_metrics(y_true, y_pred, w=w)
     union = true_total + pred_total - intersection
 
     return (intersection + 1) / (union + 1)
@@ -72,7 +72,7 @@ def dice(y_true, y_pred, w=None):
     :return: the Jaccard index
     """
 
-    j = jaccard(y_true, y_pred, w=w)
+    j = iou(y_true, y_pred, w=w)
 
     return 2 * j / (1 + j)
 

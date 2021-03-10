@@ -1,16 +1,10 @@
-import numpy as np
-import warnings
-import torch
-import torch.nn.functional as F
-import torch.utils.data as data
 
-from neuralnets.util.io import read_volume
-from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, normalize, set_seed
-from neuralnets.util.augmentation import filter_valid_segmentation_transforms
+from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, normalize
+from neuralnets.util.augmentation import split_segmentation_transforms
+from neuralnets.data.base import *
 
 
 MAX_SAMPLING_ATTEMPTS = 20
-LARGE_VALUE = 10000000
 
 
 def _orient(data, orientation=0):
@@ -71,45 +65,6 @@ def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, level
 
     # and return as a tuple
     return tuple(input_shape)
-
-
-class StandardDataset(data.Dataset):
-    """
-    Standard dataset of N 2D images
-
-    :param data_path: path to the dataset
-    :param optional scaling: tuple used for rescaling the data, or None
-    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
-    :param optional dtype: type of the data (typically uint8)
-    :param optional norm_type: type of the normalization (unit, z or minmax)
-    """
-
-    def __init__(self, data_path, scaling=None, type='tif3d', dtype='uint8', norm_type='unit'):
-        self.data_path = data_path
-        self.scaling = scaling
-        self.norm_type = norm_type
-
-        # load the data
-        self.data = read_volume(data_path, type=type, dtype=dtype)
-
-        # rescale the dataset if necessary
-        if scaling is not None:
-            target_size = np.asarray(np.multiply(self.data.shape, scaling), dtype=int)
-            self.data = \
-                F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
-                              mode='area')[0, 0, ...].numpy()
-
-    def __getitem__(self, i):
-        pass
-
-    def __len__(self):
-        return self.data.shape[0]
-
-    def _get_stats(self):
-        mu = np.mean(self.data)
-        std = np.std(self.data)
-
-        return mu, std
 
 
 class LabeledStandardDataset(StandardDataset):
@@ -189,60 +144,6 @@ class UnlabeledStandardDataset(StandardDataset):
             return input
 
 
-class VolumeDataset(data.Dataset):
-    """
-    Dataset for volumes
-
-    :param data_path: path to the dataset
-    :param input_shape: 3-tuple that specifies the input shape for sampling
-    :param optional scaling: tuple used for rescaling the data, or None
-    :param optional len_epoch: number of iterations for one epoch
-    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
-    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
-    :param optional orientations: list of orientations for sampling
-    :param optional batch_size: size of the sampling batch
-    :param optional dtype: type of the data (typically uint8)
-    :param optional norm_type: type of the normalization (unit, z or minmax)
-    """
-
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, type='tif3d', in_channels=1,
-                 orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit'):
-        self.data_path = data_path
-        self.input_shape = input_shape
-        self.scaling = scaling
-        self.len_epoch = len_epoch
-        self.in_channels = in_channels
-        self.orientations = orientations
-        self.orientation = 0
-        self.batch_size = batch_size
-        self.norm_type = norm_type
-
-        # load the data
-        self.data = read_volume(data_path, type=type, dtype=dtype)
-
-        # rescale the dataset if necessary
-        if scaling is not None:
-            target_size = np.asarray(np.multiply(self.data.shape, scaling), dtype=int)
-            self.data = \
-                F.interpolate(torch.Tensor(self.data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
-                              mode='area')[0, 0, ...].numpy()
-
-    def __getitem__(self, i):
-        pass
-
-    def __len__(self):
-        return self.len_epoch
-
-    def _get_stats(self):
-        mu = np.mean(self.data)
-        std = np.std(self.data)
-
-        return mu, std
-
-    def _select_orientation(self):
-        self.orientation = np.random.choice(self.orientations)
-
-
 class LabeledVolumeDataset(VolumeDataset):
     """
     Dataset for pixel-wise labeled volumes
@@ -263,7 +164,7 @@ class LabeledVolumeDataset(VolumeDataset):
     :param optional transform: augmenter object
     """
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=1000, type='tif3d', coi=(0, 1),
+    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
                  norm_type='unit', transform=None):
         super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
@@ -272,9 +173,9 @@ class LabeledVolumeDataset(VolumeDataset):
 
         self.label_path = label_path
         self.coi = coi
-        self.x_transform = transform
-        self.y_transform = filter_valid_segmentation_transforms(transform, coi=coi)
-        self.seed = 0
+        self.transform = transform
+        if transform is not None:
+            self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
 
         # load labels
         self.labels = read_volume(label_path, type=type, dtype=label_dtype)
@@ -311,12 +212,11 @@ class LabeledVolumeDataset(VolumeDataset):
             x, y = x[np.newaxis, ...], y[np.newaxis, ...]
 
         # augment sample
-        if self.x_transform is not None:
-            set_seed(seed=self.seed)
-            x = self.x_transform(x)
-            set_seed(seed=self.seed)
-            y = self.y_transform(y)
-            self.seed = np.mod(self.seed + 1, LARGE_VALUE)
+        if self.transform is not None:
+            data = self.shared_transform(np.concatenate((x, y), axis=0))
+            p = x.shape[0]
+            x = self.x_transform(data[:p])
+            y = self.y_transform(data[p:])
 
         # transform to tensors
         x = torch.from_numpy(x).float()
@@ -326,8 +226,9 @@ class LabeledVolumeDataset(VolumeDataset):
         if len(np.intersect1d(torch.unique(y).numpy(), self.coi)) == 0:
             if attempt < MAX_SAMPLING_ATTEMPTS:
                 x, y = self.__getitem__(i, attempt=attempt + 1)
-            else:
-                warnings.warn("No labeled pixels found after %d sampling attempts! ")
+            # else:
+                # warnings.warn("No labeled pixels found after %d sampling attempts! ")
+
 
         # return sample
         return x, y
@@ -381,79 +282,85 @@ class UnlabeledVolumeDataset(VolumeDataset):
             return input
 
 
-class MultiVolumeDataset(data.Dataset):
+class LabeledSlidingWindowDataset(SlidingWindowDataset):
     """
-    Dataset for multiple volumes
+    Dataset for pixel-wise labeled volumes with a sliding window
 
-    :param data_path: list of paths to the datasets
+    :param data_path: path to the dataset
+    :param label_path: path to the labels
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: tuple used for rescaling the data, or None
-    :param optional len_epoch: number of iterations for one epoch
-    :param optional types: list of types of the volume files (tif2d, tif3d, tifseq, hdf5, png or pngseq)
-    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
-    :param optional sampling_mode: allow for uniform balance in sampling or not ("uniform" or "random")
-    :param optional orientations: list of orientations for sampling
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional coi: list or sequence of the classes of interest
     :param optional batch_size: size of the sampling batch
-    :param optional dtype: type of the data (typically uint8)
+    :param optional data_dtype: type of the data (typically uint8)
+    :param optional label_dtype: type of the labels (typically uint8)
     :param optional norm_type: type of the normalization (unit, z or minmax)
+    :param optional transform: augmenter object
     """
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=1000, types=['tif3d'], sampling_mode='uniform',
-                 in_channels=1, orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit'):
-        self.data_path = data_path
-        self.input_shape = input_shape
-        self.scaling = scaling
-        self.len_epoch = len_epoch
-        self.sampling_mode = sampling_mode
-        self.in_channels = in_channels
-        self.orientations = orientations
-        self.orientation = 0
-        self.k = 0
-        self.batch_size = batch_size
-        self.norm_type = norm_type
+    def __init__(self, data_path, label_path, input_shape=None, scaling=None, type='tif3d', coi=(0, 1), batch_size=1,
+                 data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None):
+        super().__init__(data_path, input_shape, scaling=scaling, type=type, batch_size=batch_size, dtype=data_dtype,
+                         norm_type=norm_type)
 
-        # load the data
-        self.data = []
-        self.data_sizes = []
-        for k, path in enumerate(data_path):
-            data = read_volume(path, type=types[k], dtype=dtype)
+        self.label_path = label_path
+        self.coi = coi
+        self.transform = transform
+        if transform is not None:
+            self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
 
-            # rescale the dataset if necessary
-            if scaling is not None:
-                target_size = np.asarray(np.multiply(data.shape, scaling[k]), dtype=int)
-                data = \
-                    F.interpolate(torch.Tensor(data[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
-                                  mode='area')[0, 0, ...].numpy()
+        # load labels
+        self.labels = read_volume(label_path, type=type, dtype=label_dtype)
 
-            self.data.append(data)
-            self.data_sizes.append(data.size)
-        self.data_sizes = np.array(self.data_sizes)
-        self.data_sizes = self.data_sizes / np.sum(self.data_sizes)
+        # rescale the dataset if necessary
+        if scaling is not None:
+            target_size = np.asarray(np.multiply(self.labels.shape, scaling), dtype=int)
+            self.labels = F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
+                                        mode='area')[0, 0, ...].numpy()
+
+        # pad data so that the dimensions are a multiple of the inputs shapes
+        self.labels = pad2multiple(self.labels, input_shape, value=255)
+
+        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
-        pass
 
-    def __len__(self):
-        return self.len_epoch
+        # get spatial location
+        iz = i // (self.n_samples_dim[1] * self.n_samples_dim[2])
+        iy = (i - iz * self.n_samples_dim[1] * self.n_samples_dim[2]) // self.n_samples_dim[2]
+        ix = i - iz * self.n_samples_dim[1] * self.n_samples_dim[2] - iy * self.n_samples_dim[2]
+        pz = self.input_shape[0] * iz
+        py = self.input_shape[1] * iy
+        px = self.input_shape[2] * ix
 
-    def _get_stats(self):
-        mu = []
-        std = []
+        # get sample
+        x = self.data[pz:pz + self.input_shape[0], py:py + self.input_shape[1], px:px + self.input_shape[2]]
+        y = self.labels[pz:pz + self.input_shape[0], py:py + self.input_shape[1], px:px + self.input_shape[2]]
+        x = normalize(x, type=self.norm_type)
+        y = y.astype(float)
 
-        for data in self.data:
-            mu.append(np.mean(data))
-            std.append(np.std(data))
+        # add channel axis if the data is 3D
+        if self.input_shape[0] > 1:
+            x, y = x[np.newaxis, ...], y[np.newaxis, ...]
 
-        return mu, std
+        # augment sample
+        if self.transform is not None:
+            data = self.shared_transform(np.concatenate((x, y), axis=0))
+            p = x.shape[0]
+            x = self.x_transform(data[:p])
+            y = self.y_transform(data[p:])
 
-    def _select_orientation(self):
-        self.orientation = np.random.choice(self.orientations)
+        # transform to tensors
+        x = torch.from_numpy(x).float()
+        y = torch.from_numpy(y).long()
 
-    def _select_dataset(self):
-        if self.sampling_mode == 'uniform':
-            self.k = np.random.randint(0, len(self.data))
-        else:
-            self.k = np.random.choice(len(self.data), p=self.data_sizes)
+        # # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        # if len(np.intersect1d(torch.unique(y).numpy(), self.coi)) == 0:
+        #     warnings.warn("No labeled pixels found! ")
+
+        # return sample
+        return x, y
 
 
 class LabeledMultiVolumeDataset(MultiVolumeDataset):

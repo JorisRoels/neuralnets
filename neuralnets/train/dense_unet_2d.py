@@ -1,5 +1,5 @@
 """
-    This is a script that illustrates training a 3D U-Net
+    This is a script that illustrates training a Dense 2D U-Net
 """
 
 """
@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 from neuralnets.data.datasets import LabeledVolumeDataset, LabeledSlidingWindowDataset
-from neuralnets.networks.unet import UNet3D
+from neuralnets.networks.unet import DenseUNet2D
 from neuralnets.util.augmentation import *
 from neuralnets.util.io import print_frm
 from neuralnets.util.tools import set_seed, parse_params
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     """
     print_frm('Parsing arguments')
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", help="Path to the configuration file", type=str, default='unet_3d.yaml')
+    parser.add_argument("--config", "-c", help="Path to the configuration file", type=str, default='dense_unet_2d.yaml')
     args = parser.parse_args()
     with open(args.config) as file:
         params = parse_params(yaml.load(file, Loader=yaml.FullLoader))
@@ -42,10 +42,9 @@ if __name__ == '__main__':
         Load the data
     """
     print_frm('Loading data')
-    input_shape = params['input_size']
-    transform = Compose([Rotate90(), Flip(prob=0.5, dim=0), Flip(prob=0.5, dim=1), Flip(prob=0.5, dim=2),
-                         ContrastAdjust(adj=0.1), RandomDeformation(), AddNoise(sigma_max=0.05),
-                         CleanDeformedLabels(params['coi'])])
+    input_shape = (1, *(params['input_size']))
+    transform = Compose([Rotate90(), Flip(prob=0.5, dim=0), Flip(prob=0.5, dim=1), ContrastAdjust(adj=0.1),
+                         RandomDeformation(), AddNoise(sigma_max=0.05), CleanDeformedLabels(params['coi'])])
     train = LabeledVolumeDataset(params['train_data'], params['train_labels'], input_shape=input_shape,
                                  type=params['data_type'], batch_size=params['train_batch_size'], transform=transform)
     val = LabeledSlidingWindowDataset(params['val_data'], params['val_labels'], input_shape=input_shape,
@@ -64,9 +63,10 @@ if __name__ == '__main__':
     """
     print_frm('Building the network')
     loss_fn = get_loss_function(params['loss'])
-    net = UNet3D(feature_maps=params['fm'], levels=params['levels'], dropout_enc=params['dropout'],
-                 dropout_dec=params['dropout'], norm=params['norm'], activation=params['activation'], coi=params['coi'],
-                 loss_fn=loss_fn)
+    net = DenseUNet2D(feature_maps=params['fm'], levels=params['levels'], dropout_enc=params['dropout'],
+                      dropout_dec=params['dropout'], norm=params['norm'], activation=params['activation'],
+                      coi=params['coi'], num_layers=params['num_layers'], k=params['k'], bn_size=params['bn_size'],
+                      loss_fn=loss_fn)
 
     """
         Train the network

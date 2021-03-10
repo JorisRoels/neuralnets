@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from progress.bar import Bar
 
 from neuralnets.util.io import read_volume, write_volume, print_frm, mkdir
-from neuralnets.util.metrics import jaccard, accuracy_metrics, hausdorff_distance, _jaccard_part_metrics, \
+from neuralnets.util.numpy.metrics import iou, accuracy_metrics, hausdorff_distance, _iou_part_metrics, \
     _conf_matrix_metrics
 from neuralnets.util.tools import gaussian_window, tensor_to_device, module_to_device, normalize
 
@@ -425,7 +425,7 @@ def _cumulate_validation_metrics(z_block_pred, z_block_labels, js_cum, ams_cum, 
     w = None if all_labeled else z_block_labels != 255
 
     js = np.asarray(
-        [_jaccard_part_metrics(z_block_labels == c, z_block_pred[i], w=w) for i, c in enumerate(classes_of_interest)])
+        [_iou_part_metrics(z_block_labels == c, z_block_pred[i], w=w) for i, c in enumerate(classes_of_interest)])
     ams = np.asarray(
         [_conf_matrix_metrics(z_block_labels == c, z_block_pred[i], w=w) for i, c in enumerate(classes_of_interest)])
 
@@ -475,7 +475,7 @@ def _validate_ram(segmentation, labels, classes_of_interest=(0, 1), hausdorff=Fa
     all_labeled = np.sum(labels == 255) == 0
     w = None if all_labeled else labels != 255
     comp_hausdorff = all_labeled and hausdorff
-    js = np.asarray([jaccard(labels == c, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
+    js = np.asarray([iou(labels == c, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
     ams = np.asarray([accuracy_metrics(labels == c, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
     hs = np.zeros_like(js)
     for i, c in enumerate(classes_of_interest):

@@ -6,26 +6,26 @@ from elasticdeform import deform_random_grid
 from skimage.transform import resize, rotate
 
 
-def filter_valid_segmentation_transforms(transforms, coi=None):
+def split_segmentation_transforms(transforms):
     """
-    Filters the transforms that are valid to apply during segmentation
+    Splits the transforms in a shared part, and one specifically for the inputs and outputs
 
     :param transforms: transform object (Compose)
-    :param coi: if provided, a label cleaning transform will be attached at the end (optional)
-    :return: subset of transforms (Compose)
+    :return: subsets of transforms (Compose): shared_transforms, x_transforms and y_transforms
     """
 
-    if transforms is not None:
-        valid_transforms = []
-        for transform in transforms.transforms:
-            if transform.__class__ != AddNoise and transform.__class__ != Normalize and \
-                    transform.__class__ != ContrastAdjust:
-                valid_transforms.append(transform)
-        if coi is not None:
-            valid_transforms.append(CleanDeformedLabels(coi))
-        return Compose(valid_transforms)
-    else:
-        return None
+    shared_transforms = []
+    x_transforms = []
+    y_transforms = []
+    for transform in transforms.transforms:
+        if transform.__class__ == AddNoise or transform.__class__ == Normalize or \
+                transform.__class__ == ContrastAdjust:
+            x_transforms.append(transform)
+        elif transform.__class__ == CleanDeformedLabels:
+            y_transforms.append(transform)
+        else:
+            shared_transforms.append(transform)
+    return Compose(shared_transforms), Compose(x_transforms), Compose(y_transforms)
 
 
 class ToTensor(object):

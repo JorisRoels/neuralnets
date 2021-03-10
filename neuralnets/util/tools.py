@@ -1,4 +1,3 @@
-import copy
 import random
 
 import numpy as np
@@ -42,7 +41,7 @@ def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq
         input = input[:, x:x + input_shape[1], y:y + input_shape[2]]
         target = target[:, x:x + input_shape[1], y:y + input_shape[2]]
 
-    return copy.copy(input), copy.copy(target)
+    return input.copy(), target.copy()
 
 
 def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', data_shape=None):
@@ -74,7 +73,7 @@ def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', dat
         input = read_volume(data, type=type, start=z, stop=z + input_shape[0])
         input = input[:, x:x + input_shape[1], y:y + input_shape[2]]
 
-    return copy.copy(input)
+    return input.copy()
 
 
 def gaussian_window(size, sigma=1):
@@ -126,8 +125,8 @@ def parse_params(params):
 
     if 'input_size' in keys:
         params['input_size'] = [int(item) for item in params['input_size'].split(',')]
-    if 'classes_of_interest' in keys:
-        params['classes_of_interest'] = [int(c) for c in params['classes_of_interest'].split(',')]
+    if 'coi' in keys:
+        params['coi'] = [int(c) for c in params['coi'].split(',')]
     if 'orientations' in keys:
         if type(params['orientations']) is int:
             params['orientations'] = [params['orientations']]

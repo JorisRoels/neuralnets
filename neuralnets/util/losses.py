@@ -32,18 +32,12 @@ class CrossEntropyLoss(nn.Module):
         w = None
         if weight is not None:
             w = tensor_to_device(torch.Tensor(weight), device=device)
-        self.ce = nn.CrossEntropyLoss(weight=w, reduction="none")
+        self.ce = nn.CrossEntropyLoss(weight=w, ignore_index=255)
 
-    def forward(self, logits, target, mask=None):
+    def forward(self, logits, target):
 
         # compute loss unreduced and reshape to vector
         loss = self.ce(logits, target).view(-1)
-
-        # size averaging if necessary
-        if mask is not None:
-            loss = loss[mask.view(-1)].mean()
-        else:
-            loss = loss.mean()
 
         return loss
 
