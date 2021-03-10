@@ -77,7 +77,8 @@ if __name__ == '__main__':
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
     trainer = pl.Trainer(max_epochs=params['epochs'], gpus=params['gpus'], accelerator=params['accelerator'],
                          default_root_dir=params['log_dir'], flush_logs_every_n_steps=params['log_freq'],
-                         log_every_n_steps=params['log_freq'], callbacks=[lr_monitor])
+                         log_every_n_steps=params['log_freq'], callbacks=[lr_monitor],
+                         progress_bar_refresh_rate=params['log_refresh_rate'])
     trainer.fit(net, train_loader, val_loader)
 
     """

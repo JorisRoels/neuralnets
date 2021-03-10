@@ -137,6 +137,8 @@ def parse_params(params):
             params['gpus'] = [params['gpus']]
         else:
             params['gpus'] = [int(c) for c in params['gpus'].split(',')]
+    if 'log_refresh_rate' in keys:
+        params['log_refresh_rate'] = None if params['log_refresh_rate'] < 0 else int(params['log_refresh_rate'])
 
     return params
 

@@ -31,5 +31,6 @@ accelerator: dp
 # logging
 log_dir: unet_3d
 log_freq: 50
+log_refresh_rate: -1
 # reproducibility
 seed: 0
