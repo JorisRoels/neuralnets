@@ -102,7 +102,7 @@ class VolumeDataset(data.Dataset):
     """
     Dataset for volumes
 
-    :param data_path: path to the dataset
+    :param data: path to the dataset or a 3D volume that has already been loaded
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
@@ -114,9 +114,14 @@ class VolumeDataset(data.Dataset):
     :param optional norm_type: type of the normalization (unit, z or minmax)
     """
 
-    def __init__(self, data_path, input_shape, scaling=None, len_epoch=None, type='tif3d', in_channels=1,
+    def __init__(self, data, input_shape, scaling=None, len_epoch=None, type='tif3d', in_channels=1,
                  orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit'):
-        self.data_path = data_path
+        if isinstance(data, str):
+            self.data_path = data
+            # load the data
+            self.data = read_volume(data, type=type, dtype=dtype)
+        else:
+            self.data = data
         self.input_shape = input_shape
         self.scaling = scaling
         self.len_epoch = len_epoch
@@ -125,9 +130,6 @@ class VolumeDataset(data.Dataset):
         self.orientation = 0
         self.batch_size = batch_size
         self.norm_type = norm_type
-
-        # load the data
-        self.data = read_volume(data_path, type=type, dtype=dtype)
 
         # compute length epoch if necessary
         if len_epoch is None or len_epoch < 0:

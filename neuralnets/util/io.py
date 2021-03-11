@@ -5,6 +5,7 @@ import h5py
 import numpy as np
 import tifffile as tiff
 import datetime
+import pickle
 
 
 def read_volume(file, type='tif3d', key=None, start=0, stop=-1, dtype='uint8'):
@@ -67,7 +68,7 @@ def read_tifseq(dir, dtype='uint8', start=0, stop=-1):
         stop = len(files)
     data = np.zeros((stop - start, *sz), dtype=dtype)
     for i in range(start, stop):
-        data[i-start] = tiff.imread(os.path.join(dir, files[i]))
+        data[i - start] = tiff.imread(os.path.join(dir, files[i]))
 
     return data
 
@@ -131,7 +132,7 @@ def read_pngseq(dir, dtype='uint8', start=0, stop=-1):
         stop = len(files)
     data = np.zeros((stop - start, sz[0], sz[1]), dtype=dtype)
     for i in range(start, stop):
-        data[i-start] = cv2.imread(os.path.join(dir, files[i]), cv2.IMREAD_ANYDEPTH).astype(dtype)
+        data[i - start] = cv2.imread(os.path.join(dir, files[i]), cv2.IMREAD_ANYDEPTH).astype(dtype)
 
     return data
 
@@ -242,6 +243,30 @@ def write_pngseq(x, dir, prefix='', index_inc=0, start=0, stop=-1, dtype='uint8'
         i_str = _num2str(index_inc + i, K=K)
         cv2.imwrite(dir + '/' + prefix + i_str + '.png', (x[i, :, :]).astype(dtype),
                     [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
+
+def load(file):
+    """
+    Load pickled file
+
+    :param file: path to pickled file
+    :return: loaded object
+    """
+
+    with open(file, 'rb') as f:
+        return pickle.load(f)
+
+
+def save(data, file):
+    """
+    Write object to a pickle file
+
+    :param data: object to write
+    :param file: path to the file
+    """
+
+    with open(file, 'wb') as f:
+        pickle.dump(data, f)
 
 
 def mkdir(filename):

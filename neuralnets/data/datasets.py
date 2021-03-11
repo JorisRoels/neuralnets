@@ -148,8 +148,8 @@ class LabeledVolumeDataset(VolumeDataset):
     """
     Dataset for pixel-wise labeled volumes
 
-    :param data_path: path to the dataset
-    :param label_path: path to the labels
+    :param data: path to the dataset or a 3D volume that has already been loaded
+    :param labels: path to the labels or a 3D volume that has already been loaded
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional len_epoch: number of iterations for one epoch
@@ -164,21 +164,23 @@ class LabeledVolumeDataset(VolumeDataset):
     :param optional transform: augmenter object
     """
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
+    def __init__(self, data, labels, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
                  norm_type='unit', transform=None):
-        super().__init__(data_path, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
+        super().__init__(data, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
                          in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
                          norm_type=norm_type)
 
-        self.label_path = label_path
+        if isinstance(labels, str):
+            self.labels_path = labels
+            # load labels
+            self.labels = read_volume(labels, type=type, dtype=label_dtype)
+        else:
+            self.labels = labels
         self.coi = coi
         self.transform = transform
         if transform is not None:
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
-
-        # load labels
-        self.labels = read_volume(label_path, type=type, dtype=label_dtype)
 
         # rescale the dataset if necessary
         if scaling is not None:

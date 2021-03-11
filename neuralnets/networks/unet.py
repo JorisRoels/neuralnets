@@ -7,6 +7,7 @@ from neuralnets.util.torch.metrics import iou
 from neuralnets.util.tools import *
 from neuralnets.util.augmentation import *
 from neuralnets.util.losses import CrossEntropyLoss
+from neuralnets.util.validation import segment, validate
 
 
 class UNetEncoder(nn.Module):
@@ -649,10 +650,31 @@ class UNet(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         scheduler = ReduceLROnPlateau(optimizer, 'max')
-        return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": 'val/mIoU'}
+        return {"optimizer": optimizer}
+        # return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": 'val/mIoU'}
 
     def on_epoch_start(self):
         set_seed(rnd.randint(100000))
+
+    def segment(self, data, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
+                device=0, orientations=(0,), normalization='unit'):
+
+        segmentation = segment(data, self, input_shape[1:], in_channels=in_channels, batch_size=batch_size,
+                               step_size=step_size, train=train, track_progress=track_progress, device=device,
+                               orientations=orientations, normalization=normalization)
+
+        return segmentation
+
+    def validate(self, data, labels, input_shape, in_channels=1, classes_of_interest=(0, 1), batch_size=1,
+                 write_dir=None, val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit',
+                 hausdorff=False):
+
+        js, ams = validate(self, data, labels, input_shape[1:], in_channels=in_channels,
+                           classes_of_interest=classes_of_interest, batch_size=batch_size, write_dir=write_dir,
+                           val_file=val_file, track_progress=track_progress, device=device, orientations=orientations,
+                           normalization=normalization, hausdorff=hausdorff)
+
+        return np.mean(js)
 
     def _log_predictions(self, x, y, y_pred, prefix='train'):
         tensorboard = self.logger.experiment

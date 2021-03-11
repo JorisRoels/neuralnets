@@ -69,9 +69,9 @@ def sliding_window_multichannel(image, step_size, window_size, in_channels=1, tr
 def _init_step_size(step_size, input_shape, is2d):
     if step_size == None:
         if is2d:
-            step_size = (1, input_shape[0] // 2, input_shape[1] // 2)
+            step_size = (1, max(1, input_shape[0] // 2), max(1, input_shape[1] // 2))
         else:
-            step_size = (input_shape[0] // 2, input_shape[1] // 2, input_shape[2] // 2)
+            step_size = (max(1, input_shape[0] // 2), max(1, input_shape[1] // 2), max(1, input_shape[2] // 2))
     return step_size
 
 
