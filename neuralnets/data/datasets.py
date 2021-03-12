@@ -162,14 +162,16 @@ class LabeledVolumeDataset(VolumeDataset):
     :param optional label_dtype: type of the labels (typically uint8)
     :param optional norm_type: type of the normalization (unit, z or minmax)
     :param optional transform: augmenter object
+    :param optional range_split: range of slices (start, stop) to select (normalized between 0 and 1)
+    :param optional range_dir: orientation of the slicing
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
-                 norm_type='unit', transform=None):
+                 norm_type='unit', transform=None, range_split=None, range_dir=None):
         super().__init__(data, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
                          in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
-                         norm_type=norm_type)
+                         norm_type=norm_type, range_split=range_split, range_dir=range_dir)
 
         if isinstance(labels, str):
             self.labels_path = labels
@@ -182,13 +184,14 @@ class LabeledVolumeDataset(VolumeDataset):
         if transform is not None:
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
 
+        # select a subset of slices of the data
+        self.labels = slice_subset(self.labels, range_split, range_dir)
+
         # rescale the dataset if necessary
         if scaling is not None:
             target_size = np.asarray(np.multiply(self.labels.shape, scaling), dtype=int)
             self.labels = F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                                         mode='area')[0, 0, ...].numpy()
-
-        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i, attempt=0):
 
@@ -301,19 +304,25 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
     :param optional transform: augmenter object
     """
 
-    def __init__(self, data_path, label_path, input_shape=None, scaling=None, type='tif3d', coi=(0, 1), batch_size=1,
-                 data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None):
-        super().__init__(data_path, input_shape, scaling=scaling, type=type, batch_size=batch_size, dtype=data_dtype,
-                         norm_type=norm_type)
+    def __init__(self, data, labels, input_shape=None, scaling=None, type='tif3d', coi=(0, 1), batch_size=1,
+                 data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None, range_split=None,
+                 range_dir=None):
+        super().__init__(data, input_shape, scaling=scaling, type=type, batch_size=batch_size, dtype=data_dtype,
+                         norm_type=norm_type, range_split=range_split, range_dir=range_dir)
 
-        self.label_path = label_path
+        if isinstance(labels, str):
+            self.labels_path = labels
+            # load labels
+            self.labels = read_volume(labels, type=type, dtype=label_dtype)
+        else:
+            self.labels = labels
         self.coi = coi
         self.transform = transform
         if transform is not None:
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
 
-        # load labels
-        self.labels = read_volume(label_path, type=type, dtype=label_dtype)
+        # select a subset of slices of the data
+        self.labels = slice_subset(self.labels, range_split, range_dir)
 
         # rescale the dataset if necessary
         if scaling is not None:
@@ -323,8 +332,6 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
 
         # pad data so that the dimensions are a multiple of the inputs shapes
         self.labels = pad2multiple(self.labels, input_shape, value=255)
-
-        self.mu, self.std = self._get_stats()
 
     def __getitem__(self, i):
 

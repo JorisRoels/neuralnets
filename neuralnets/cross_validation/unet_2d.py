@@ -41,14 +41,14 @@ if __name__ == '__main__':
     """
     print_frm('Loading data')
     input_shape = (1, *(params['input_size']))
+    split = params['train_val_test_split']
     transform = Compose([Rotate90(), Flip(prob=0.5, dim=0), Flip(prob=0.5, dim=1), ContrastAdjust(adj=0.1),
                          RandomDeformation(), AddNoise(sigma_max=0.05), CleanDeformedLabels(params['coi'])])
-    train = LabeledVolumeDataset(params['train_data'], params['train_labels'], input_shape=input_shape,
-                                 type=params['data_type'], batch_size=params['train_batch_size'], transform=transform)
-    val = LabeledSlidingWindowDataset(params['val_data'], params['val_labels'], input_shape=input_shape,
-                                      type=params['data_type'], batch_size=params['train_batch_size'])
-    X_train = np.concatenate((train.data, val.data), axis=0)
-    y_train = np.concatenate((train.labels, val.labels), axis=0)
+    train = LabeledVolumeDataset(params['data'], params['labels'], input_shape=input_shape, type=params['type'],
+                                 batch_size=params['train_batch_size'], transform=transform, range_split=(0, split[0]),
+                                 range_dir=params['split_orientation'])
+    X_train = train.data
+    y_train = train.labels
 
     """
         Build the network

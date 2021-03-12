@@ -3,13 +3,11 @@
 # ===========
 #
 # data
-train_data: /home/jorisro/research/data/EM/EPFL/train
-train_labels: /home/jorisro/research/data/EM/EPFL/train_labels
-val_data: /home/jorisro/research/data/EM/EPFL/val
-val_labels: /home/jorisro/research/data/EM/EPFL/val_labels
-test_data: /home/jorisro/research/data/EM/EPFL/test
-test_labels: /home/jorisro/research/data/EM/EPFL/test_labels
-data_type: pngseq
+data: /home/jorisro/research/data/EM/EPFL/raw
+labels: /home/jorisro/research/data/EM/EPFL/labels
+train_val_test_split: 0.50,0.75
+split_orientation: z
+type: pngseq
 # network
 input_size: 16,64,64
 fm: 16

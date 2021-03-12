@@ -42,16 +42,19 @@ if __name__ == '__main__':
         Load the data
     """
     print_frm('Loading data')
-    input_shape = params['input_size']
-    transform = Compose([Rotate90(), Flip(prob=0.5, dim=0), Flip(prob=0.5, dim=1), Flip(prob=0.5, dim=2),
-                         ContrastAdjust(adj=0.1), RandomDeformation(), AddNoise(sigma_max=0.05),
-                         CleanDeformedLabels(params['coi'])])
-    train = LabeledVolumeDataset(params['train_data'], params['train_labels'], input_shape=input_shape,
-                                 type=params['data_type'], batch_size=params['train_batch_size'], transform=transform)
-    val = LabeledSlidingWindowDataset(params['val_data'], params['val_labels'], input_shape=input_shape,
-                                      type=params['data_type'], batch_size=params['train_batch_size'])
-    test = LabeledSlidingWindowDataset(params['test_data'], params['test_labels'], input_shape=input_shape,
-                                       type=params['data_type'], batch_size=params['test_batch_size'])
+    input_shape = (1, *(params['input_size']))
+    split = params['train_val_test_split']
+    transform = Compose([Rotate90(), Flip(prob=0.5, dim=0), Flip(prob=0.5, dim=1), ContrastAdjust(adj=0.1),
+                         RandomDeformation(), AddNoise(sigma_max=0.05), CleanDeformedLabels(params['coi'])])
+    train = LabeledVolumeDataset(params['data'], params['labels'], input_shape=input_shape, type=params['type'],
+                                 batch_size=params['train_batch_size'], transform=transform, range_split=(0, split[0]),
+                                 range_dir=params['split_orientation'])
+    val = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape, type=params['type'],
+                                      batch_size=params['test_batch_size'], range_split=(split[0], split[1]),
+                                      range_dir=params['split_orientation'])
+    test = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape, type=params['type'],
+                                       batch_size=params['test_batch_size'], range_split=(split[1], 1),
+                                       range_dir=params['split_orientation'])
     train_loader = DataLoader(train, batch_size=params['train_batch_size'], num_workers=params['num_workers'],
                               pin_memory=True)
     val_loader = DataLoader(val, batch_size=params['test_batch_size'], num_workers=params['num_workers'],

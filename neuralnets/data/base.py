@@ -59,6 +59,25 @@ def pad2multiple(x, input_shape, value=0):
     return x
 
 
+def slice_subset(x, range, orientation):
+    if range is not None and orientation is not None:
+        start, stop = range
+        z_dim, y_dim, x_dim = x.shape
+        if orientation == 'z':
+            start = int(start * z_dim)
+            stop = int(stop * z_dim)
+            x = x[start:stop, :, :]
+        elif orientation == 'y':
+            start = int(start * y_dim)
+            stop = int(stop * y_dim)
+            x = x[:, start:stop, :]
+        else:
+            start = int(start * x_dim)
+            stop = int(stop * x_dim)
+            x = x[:, :, start:stop]
+    return x
+
+
 class StandardDataset(data.Dataset):
     """
     Standard dataset of N 2D images
@@ -112,10 +131,12 @@ class VolumeDataset(data.Dataset):
     :param optional batch_size: size of the sampling batch
     :param optional dtype: type of the data (typically uint8)
     :param optional norm_type: type of the normalization (unit, z or minmax)
+    :param optional range_split: range of slices (start, stop) to select (normalized between 0 and 1)
+    :param optional range_dir: orientation of the slicing
     """
 
     def __init__(self, data, input_shape, scaling=None, len_epoch=None, type='tif3d', in_channels=1,
-                 orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit'):
+                 orientations=(0,), batch_size=1, dtype='uint8', norm_type='unit', range_split=None, range_dir=None):
         if isinstance(data, str):
             self.data_path = data
             # load the data
@@ -130,6 +151,11 @@ class VolumeDataset(data.Dataset):
         self.orientation = 0
         self.batch_size = batch_size
         self.norm_type = norm_type
+        self.range_split = range_split
+        self.range_dir = range_dir
+
+        # select a subset of slices of the data
+        self.data = slice_subset(self.data, range_split, range_dir)
 
         # compute length epoch if necessary
         if len_epoch is None or len_epoch < 0:
@@ -165,25 +191,34 @@ class SlidingWindowDataset(data.Dataset):
     """
     Dataset for sliding window over volumes
 
-    :param data_path: path to the dataset
+    :param data: path to the dataset or a 3D volume that has already been loaded
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
     :param optional batch_size: size of the sampling batch
     :param optional dtype: type of the data (typically uint8)
     :param optional norm_type: type of the normalization (unit, z or minmax)
+    :param optional range_split: range of slices (start, stop) to select (normalized between 0 and 1)
+    :param optional range_dir: orientation of the slicing
     """
 
-    def __init__(self, data_path, input_shape, scaling=None, type='tif3d', batch_size=1, dtype='uint8',
-                 norm_type='unit'):
-        self.data_path = data_path
+    def __init__(self, data, input_shape, scaling=None, type='tif3d', batch_size=1, dtype='uint8',
+                 norm_type='unit', range_split=None, range_dir=None):
+        if isinstance(data, str):
+            self.data_path = data
+            # load the data
+            self.data = read_volume(data, type=type, dtype=dtype)
+        else:
+            self.data = data
         self.input_shape = input_shape
         self.scaling = scaling
         self.batch_size = batch_size
         self.norm_type = norm_type
+        self.range_split = range_split
+        self.range_dir = range_dir
 
-        # load the data
-        self.data = read_volume(data_path, type=type, dtype=dtype)
+        # select a subset of slices of the data
+        self.data = slice_subset(self.data, range_split, range_dir)
 
         # rescale the dataset if necessary
         if scaling is not None:
