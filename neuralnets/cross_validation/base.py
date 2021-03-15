@@ -81,7 +81,7 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
 
         # construct dataloader
         train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, batch_size=self.train_batch_size,
-                                     transform=self.transform, len_epoch=10)
+                                     transform=self.transform)
         loader = DataLoader(train, batch_size=self.train_batch_size, num_workers=self.num_workers, pin_memory=True)
 
         # train the network
@@ -169,7 +169,7 @@ class UNet2DClassifier(PLClassifier):
 
         # construct dataloader
         train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, batch_size=self.train_batch_size,
-                                     transform=self.transform, len_epoch=10)
+                                     transform=self.transform)
         loader = DataLoader(train, batch_size=self.train_batch_size, num_workers=self.num_workers, pin_memory=True)
 
         # train the network
