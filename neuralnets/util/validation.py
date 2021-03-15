@@ -750,7 +750,8 @@ def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None,
 
 
 def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(0, 1), batch_size=1, write_dir=None,
-             val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit', hausdorff=False):
+             val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit', hausdorff=False,
+             report=True):
     """
     Validate a network on a dataset and its labels
 
@@ -768,6 +769,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :param orientations: list of orientations to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
     :param normalization: type of data normalization (unit, z or minmax)
     :param hausdorff: compute hausdorff or not
+    :param report: get a report of the validation results or not
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
@@ -775,12 +777,12 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
         js, ams = segment_read(data, net, input_size, write_dir=write_dir, in_channels=in_channels,
                                batch_size=batch_size, track_progress=track_progress, device=device,
                                orientations=orientations, normalization=normalization, labels=labels, val_file=val_file,
-                               classes_of_interest=classes_of_interest, report=True)
+                               classes_of_interest=classes_of_interest, report=report)
     else:
         segmentation, js, ams = segment_ram(data, net, input_size, write_dir=write_dir, in_channels=in_channels,
                                             batch_size=batch_size, track_progress=track_progress, device=device,
                                             orientations=orientations, normalization=normalization, labels=labels,
                                             val_file=val_file, classes_of_interest=classes_of_interest,
-                                            hausdorff=hausdorff, report=True)
+                                            hausdorff=hausdorff, report=report)
 
     return js, ams

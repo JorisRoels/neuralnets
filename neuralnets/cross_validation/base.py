@@ -1,25 +1,39 @@
 
-from sklearn.base import BaseEstimator, ClassifierMixin
+import os
+import numpy as np
+import torch
 import pytorch_lightning as pl
+
+from sklearn.base import BaseEstimator, ClassifierMixin
 from torch.utils.data import DataLoader
+from pytorch_lightning.callbacks import ModelCheckpoint
+
 from neuralnets.data.datasets import LabeledVolumeDataset
 from neuralnets.networks.unet import UNet2D
 from neuralnets.util.losses import CrossEntropyLoss
 
 
+def _correct_type(param, values):
+
+    vs = values.split(';')
+    values = []
+    for v in vs:
+        try:
+            v_ = float(v)
+        except ValueError:
+            v_ = v
+        values.append(v_)
+
+    return param, values
+
+
 def parse_search_grid(sg_str):
+
     sg = sg_str.split('#')
     search_grid = {}
     for s in sg:
-        param, vs = s.split(':')
-        vs = vs.split(',')
-        values = []
-        for v in vs:
-            try:
-                v_ = float(v)
-            except ValueError:
-                v_ = v
-            values.append(v_)
+        param, values = s.split(':')
+        param, values = _correct_type(param, values)
         search_grid[param] = values
 
     return search_grid
@@ -49,8 +63,8 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
         self.transform = transform
 
         # initialize the trainer
-        # lr_monitor = [pl.callbacks.LearningRateMonitor(logging_interval='step')]
-        callbacks = None
+        checkpoint_callback = ModelCheckpoint(save_top_k=0)
+        callbacks = [checkpoint_callback]
         self.trainer = pl.Trainer(max_epochs=self.epochs, gpus=self.gpus, accelerator=self.accelerator,
                                   default_root_dir=self.log_dir, flush_logs_every_n_steps=self.log_freq,
                                   log_every_n_steps=self.log_freq, callbacks=callbacks,
@@ -84,12 +98,29 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
 
     def score(self, X, y, sample_weight=None):
 
-        metrics = self.model.validate(X, y, self.model.input_shape, in_channels=self.model.in_channels,
-                                      classes_of_interest=self.model.coi, batch_size=self.test_batch_size,
-                                      device=self.device, orientations=self.orientations,
-                                      normalization=self.normalization)
+        # validate each model state and save the metrics
+        checkpoints = os.listdir(self.trainer.checkpoint_callback.dirpath)
+        checkpoints.sort()
+        metrics = np.zeros(len(checkpoints))
+        for i, ckpt in enumerate(checkpoints):
+            ckpt_path = os.path.join(self.trainer.checkpoint_callback.dirpath, ckpt)
+            self.model.load_state_dict(torch.load(ckpt_path))
+            metrics[i] = self.model.validate(X, y, self.model.input_shape, in_channels=self.model.in_channels,
+                                             classes_of_interest=self.model.coi, batch_size=self.test_batch_size,
+                                             device=self.device, orientations=self.orientations,
+                                             normalization=self.normalization, report=False)
 
-        return metrics
+        # find the best model state
+        j = np.argmax(metrics)
+        metric = metrics[j]
+
+        # remove the remaining checkpoints
+        for i, ckpt in enumerate(checkpoints):
+            if i != j:
+                ckpt_path = os.path.join(self.trainer.checkpoint_callback.dirpath, ckpt)
+                os.remove(ckpt_path)
+
+        return metric
 
 
 class UNet2DClassifier(PLClassifier):

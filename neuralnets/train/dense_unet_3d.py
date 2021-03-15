@@ -16,7 +16,6 @@ from neuralnets.networks.unet import DenseUNet3D
 from neuralnets.util.augmentation import *
 from neuralnets.util.io import print_frm
 from neuralnets.util.tools import set_seed, parse_params
-from neuralnets.util.losses import get_loss_function
 
 from multiprocessing import freeze_support
 
@@ -66,17 +65,16 @@ if __name__ == '__main__':
         Build the network
     """
     print_frm('Building the network')
-    loss_fn = get_loss_function(params['loss'])
     net = DenseUNet3D(feature_maps=params['fm'], levels=params['levels'], dropout_enc=params['dropout'],
                       dropout_dec=params['dropout'], norm=params['norm'], activation=params['activation'],
                       coi=params['coi'], num_layers=params['num_layers'], k=params['k'], bn_size=params['bn_size'],
-                      loss_fn=loss_fn)
+                      loss_fn=params['loss'])
 
     """
         Train the network
     """
     print_frm('Starting training')
-    print_frm('Training with loss: %s' % loss_fn)
+    print_frm('Training with loss: %s' % params['loss'])
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
     trainer = pl.Trainer(max_epochs=params['epochs'], gpus=params['gpus'], accelerator=params['accelerator'],
                          default_root_dir=params['log_dir'], flush_logs_every_n_steps=params['log_freq'],

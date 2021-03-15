@@ -1,12 +1,13 @@
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import iou
+import os
 
 from neuralnets.networks.blocks import *
 from neuralnets.util.torch.metrics import iou
 from neuralnets.util.tools import *
 from neuralnets.util.augmentation import *
-from neuralnets.util.losses import CrossEntropyLoss
+from neuralnets.util.losses import get_loss_function
 from neuralnets.util.validation import segment, validate
 
 
@@ -543,25 +544,28 @@ class UNet(pl.LightningModule):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3):
+                 dropout_dec=0.0, loss_fn="ce", lr=1e-3):
         super().__init__()
 
         # parameters
-        self.input_shape = input_shape
-        self.in_channels = in_channels
+        if isinstance(input_shape, tuple):
+            self.input_shape = input_shape
+        else:  # assuming string object
+            self.input_shape = [int(item) for item in input_shape.split(',')]
+        self.in_channels = int(in_channels)
         self.c = in_channels // 2
         self.coi = coi
         self.out_channels = len(coi)
-        self.feature_maps = feature_maps
-        self.levels = levels
-        self.skip_connections = skip_connections
-        self.residual_connections = residual_connections
+        self.feature_maps = int(feature_maps)
+        self.levels = int(levels)
+        self.skip_connections = bool(skip_connections)
+        self.residual_connections = bool(residual_connections)
         self.norm = norm
-        self.dropout_enc = dropout_enc
-        self.dropout_dec = dropout_dec
+        self.dropout_enc = float(dropout_enc)
+        self.dropout_dec = float(dropout_dec)
         self.activation = activation
-        self.loss_fn = loss_fn
-        self.lr = lr
+        self.loss_fn = get_loss_function(loss_fn)
+        self.lr = float(lr)
 
     def forward(self, x):
 
@@ -656,6 +660,10 @@ class UNet(pl.LightningModule):
     def on_epoch_start(self):
         set_seed(rnd.randint(100000))
 
+    def on_epoch_end(self):
+        torch.save(self.state_dict(), os.path.join(self.logger.log_dir, 'checkpoints', 'epoch=%d-step=%d.ckpt' %
+                                                   (self.current_epoch, self.global_step)))
+
     def segment(self, data, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
                 device=0, orientations=(0,), normalization='unit'):
 
@@ -667,12 +675,12 @@ class UNet(pl.LightningModule):
 
     def validate(self, data, labels, input_shape, in_channels=1, classes_of_interest=(0, 1), batch_size=1,
                  write_dir=None, val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit',
-                 hausdorff=False):
+                 hausdorff=False, report=True):
 
         js, ams = validate(self, data, labels, input_shape[1:], in_channels=in_channels,
                            classes_of_interest=classes_of_interest, batch_size=batch_size, write_dir=write_dir,
                            val_file=val_file, track_progress=track_progress, device=device, orientations=orientations,
-                           normalization=normalization, hausdorff=hausdorff)
+                           normalization=normalization, hausdorff=hausdorff, report=report)
 
         return np.mean(js)
 
@@ -693,87 +701,91 @@ class UNet2D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3):
+                 dropout_dec=0.0, loss_fn='ce', lr=1e-3):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
                          loss_fn=loss_fn, lr=lr)
 
         # contractive path
-        self.encoder = UNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
-                                     dropout=dropout_enc, activation=activation)
+        self.encoder = UNetEncoder2D(self.in_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                     norm=self.norm, dropout=self.dropout_enc, activation=self.activation)
         # expansive path
-        self.decoder = UNetDecoder2D(self.out_channels, feature_maps=feature_maps, levels=levels,
-                                     skip_connections=skip_connections, residual_connections=residual_connections,
-                                     norm=norm, dropout=dropout_dec, activation=activation)
+        self.decoder = UNetDecoder2D(self.out_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                     skip_connections=self.skip_connections,
+                                     residual_connections=self.residual_connections, norm=self.norm,
+                                     dropout=self.dropout_dec, activation=self.activation)
 
 
 class UNet3D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3):
+                 dropout_dec=0.0, loss_fn='ce', lr=1e-3):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
                          loss_fn=loss_fn, lr=lr)
 
         # contractive path
-        self.encoder = UNetEncoder3D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
-                                     dropout=dropout_enc, activation=activation)
+        self.encoder = UNetEncoder3D(self.in_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                     norm=self.norm, dropout=self.dropout_enc, activation=self.activation)
         # expansive path
-        self.decoder = UNetDecoder3D(self.out_channels, feature_maps=feature_maps, levels=levels,
-                                     skip_connections=skip_connections, residual_connections=residual_connections,
-                                     norm=norm, dropout=dropout_dec, activation=activation)
+        self.decoder = UNetDecoder3D(self.out_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                     skip_connections=self.skip_connections,
+                                     residual_connections=self.residual_connections, norm=self.norm,
+                                     dropout=self.dropout_dec, activation=self.activation)
 
 
 class DenseUNet2D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn=CrossEntropyLoss(), lr=1e-3):
+                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn='ce', lr=1e-3):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
                          loss_fn=loss_fn, lr=lr)
 
         # parameters
-        self.num_layers = num_layers
-        self.k = k
-        self.bn_size = bn_size
+        self.num_layers = int(num_layers)
+        self.k = int(k)
+        self.bn_size = float(bn_size)
 
         # contractive path
-        self.encoder = DenseUNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
-                                          dropout=dropout_enc, activation=activation, num_layers=num_layers, k=k,
-                                          bn_size=bn_size)
+        self.encoder = DenseUNetEncoder2D(self.in_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                          norm=self.norm, dropout=self.dropout_enc, activation=self.activation,
+                                          num_layers=self.num_layers, k=self.k, bn_size=self.bn_size)
         # expansive path
-        self.decoder = DenseUNetDecoder2D(self.out_channels, feature_maps=feature_maps, levels=levels,
-                                          skip_connections=skip_connections, residual_connections=residual_connections,
-                                          norm=norm, dropout=dropout_dec, activation=activation, num_layers=num_layers,
-                                          k=k, bn_size=bn_size)
+        self.decoder = DenseUNetDecoder2D(self.out_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                          skip_connections=self.skip_connections,
+                                          residual_connections=self.residual_connections, norm=self.norm,
+                                          dropout=self.dropout_dec, activation=self.activation,
+                                          num_layers=self.num_layers, k=self.k, bn_size=self.bn_size)
 
 
 class DenseUNet3D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn=CrossEntropyLoss(), lr=1e-3):
+                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn='ce', lr=1e-3):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
                          loss_fn=loss_fn, lr=lr)
 
         # parameters
-        self.num_layers = num_layers
-        self.k = k
-        self.bn_size = bn_size
+        self.num_layers = int(num_layers)
+        self.k = int(k)
+        self.bn_size = float(bn_size)
 
         # contractive path
-        self.encoder = DenseUNetEncoder3D(in_channels, feature_maps=feature_maps, levels=levels, norm=norm,
-                                          dropout=dropout_enc, activation=activation, num_layers=num_layers, k=k,
-                                          bn_size=bn_size)
+        self.encoder = DenseUNetEncoder3D(self.in_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                          norm=self.norm, dropout=self.dropout_enc, activation=self.activation,
+                                          num_layers=self.num_layers, k=self.k, bn_size=self.bn_size)
         # expansive path
-        self.decoder = DenseUNetDecoder3D(self.out_channels, feature_maps=feature_maps, levels=levels,
-                                          skip_connections=skip_connections, residual_connections=residual_connections,
-                                          norm=norm, dropout=dropout_dec, activation=activation, num_layers=num_layers,
-                                          k=k, bn_size=bn_size)
+        self.decoder = DenseUNetDecoder3D(self.out_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                          skip_connections=self.skip_connections,
+                                          residual_connections=self.residual_connections, norm=self.norm,
+                                          dropout=self.dropout_dec, activation=self.activation,
+                                          num_layers=self.num_layers, k=self.k, bn_size=self.bn_size)
