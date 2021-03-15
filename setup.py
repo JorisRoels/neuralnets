@@ -22,13 +22,16 @@ setuptools.setup(
     install_requires=[
         "torch",
         "torchvision",
+        "pytorch-lightning",
         "future",
+        "pyyaml",
         "tensorboard",
         "numpy",
         "tifffile",
         "h5py",
         "scikit-image",
         "opencv-python",
+        "elasticdeform",
         "progress",
         "six",
         "sklearn"

@@ -3,9 +3,12 @@ import random
 import numpy as np
 import torch
 import torchvision.utils as vutils
-from scipy.ndimage.morphology import binary_opening
 
 from neuralnets.util.io import read_volume
+
+from scipy.ndimage.morphology import binary_opening
+from torch.utils.tensorboard import SummaryWriter
+from itertools import product
 
 
 def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq', data_shape=None):
@@ -404,6 +407,20 @@ def log_images_3d(images, names, writer, epoch=0, scale_each=True):
         x = x[:, :, x.size(2) // 2, :, :]
         x = vutils.make_grid(x, normalize=x.max() - x.min() > 0, scale_each=scale_each)
         writer.add_image(id, x, epoch)
+
+
+def log_hparams(gs, log_dir='logs'):
+    mkdir(hparams_dir)
+    parameters = gs.param_grid
+    param_keys = list(parameters.keys())
+    param_values = [v for v in parameters.values()]
+    metrics = gs.cv_results_['mean_test_score']
+    for j, params_val in enumerate(product(*param_values)):
+        tb = SummaryWriter(log_dir=log_dir)
+        p_dict = {key: params_val[i] for i, key in enumerate(param_keys)}
+        m_dict = {'mIoU': metrics[j]}
+        tb.add_hparams(p_dict, m_dict)
+        tb.close()
 
 
 def clean_labels(y, n_classes):

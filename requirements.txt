@@ -1,6 +1,5 @@
 torch
 torchvision
-skorch
 pytorch-lightning
 future
 pyyaml

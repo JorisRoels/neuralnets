@@ -11,29 +11,12 @@ import os
 
 from neuralnets.data.datasets import LabeledVolumeDataset
 from neuralnets.util.augmentation import *
-from neuralnets.util.io import print_frm, save, mkdir
-from neuralnets.util.tools import set_seed, parse_params
+from neuralnets.util.io import print_frm, save
+from neuralnets.util.tools import set_seed, parse_params, log_hparams
 from neuralnets.cross_validation.base import UNet2DClassifier, parse_search_grid
 
 from multiprocessing import freeze_support
 from sklearn.model_selection import GridSearchCV
-
-from torch.utils.tensorboard import SummaryWriter
-from itertools import product
-
-
-def log_hparams(gs, log_dir='logs'):
-    mkdir(hparams_dir)
-    parameters = gs.param_grid
-    param_keys = list(parameters.keys())
-    param_values = [v for v in parameters.values()]
-    metrics = gs.cv_results_['mean_test_score']
-    for j, params_val in enumerate(product(*param_values)):
-        tb = SummaryWriter(log_dir=log_dir)
-        p_dict = {key: params_val[i] for i, key in enumerate(param_keys)}
-        m_dict = {'mIoU': metrics[j]}
-        tb.add_hparams(p_dict, m_dict)
-        tb.close()
 
 
 if __name__ == '__main__':
