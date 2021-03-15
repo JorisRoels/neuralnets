@@ -18,9 +18,15 @@ def _correct_type(param, values):
     vs = values.split(';')
     values = []
     for v in vs:
-        try:
+        if param == 'fm' or param == 'levels' or param == 'epochs':
+            v_ = int(v)
+        elif param == 'skip_connections' or param == 'residual_connections':
+            v_ = bool(int(v))
+        elif param == 'dropout_enc' or param == 'dropout_dec' or param == 'lr':
             v_ = float(v)
-        except ValueError:
+        elif param == 'input_shape':
+            v_ = [int(item) for item in v.split(',')]
+        else:
             v_ = v
         values.append(v_)
 
@@ -64,13 +70,10 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
 
         # initialize the trainer
         checkpoint_callback = ModelCheckpoint(save_top_k=0)
-        callbacks = [checkpoint_callback]
-        self.trainer = pl.Trainer(max_epochs=self.epochs, gpus=self.gpus, accelerator=self.accelerator,
-                                  default_root_dir=self.log_dir, flush_logs_every_n_steps=self.log_freq,
-                                  log_every_n_steps=self.log_freq, callbacks=callbacks,
-                                  progress_bar_refresh_rate=self.log_refresh_rate)
+        self.callbacks = [checkpoint_callback]
 
-        # initialize the model: should be set in an implementation!
+        # initialize the model and trainer: should be set in an implementation!
+        self.trainer = None
         self.model = None
 
 
@@ -78,7 +81,7 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
 
         # construct dataloader
         train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, batch_size=self.train_batch_size,
-                                     transform=self.transform)
+                                     transform=self.transform, len_epoch=10)
         loader = DataLoader(train, batch_size=self.train_batch_size, num_workers=self.num_workers, pin_memory=True)
 
         # train the network
@@ -150,9 +153,27 @@ class UNet2DClassifier(PLClassifier):
         self.loss_fn = loss_fn
         self.lr = lr
 
-        # initialize model
-        self.model = UNet2D(input_shape=input_shape, in_channels=in_channels, feature_maps=feature_maps, levels=levels,
-                            skip_connections=skip_connections, residual_connections=residual_connections,
-                            dropout_enc=dropout_enc, dropout_dec=dropout_dec, norm=norm, activation=activation, coi=coi,
-                            loss_fn=loss_fn, lr=lr)
+
+    def fit(self, X, y):
+
+        # initialize model and trainer
+        self.model = UNet2D(input_shape=self.input_shape, in_channels=self.in_channels, feature_maps=self.feature_maps,
+                            levels=self.levels, skip_connections=self.skip_connections,
+                            residual_connections=self.residual_connections, dropout_enc=self.dropout_enc,
+                            dropout_dec=self.dropout_dec, norm=self.norm, activation=self.activation, coi=self.coi,
+                            loss_fn=self.loss_fn, lr=self.lr)
+        self.trainer = pl.Trainer(max_epochs=self.epochs, gpus=self.gpus, accelerator=self.accelerator,
+                                  default_root_dir=self.log_dir, flush_logs_every_n_steps=self.log_freq,
+                                  log_every_n_steps=self.log_freq, callbacks=self.callbacks,
+                                  progress_bar_refresh_rate=self.log_refresh_rate)
+
+        # construct dataloader
+        train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, batch_size=self.train_batch_size,
+                                     transform=self.transform, len_epoch=10)
+        loader = DataLoader(train, batch_size=self.train_batch_size, num_workers=self.num_workers, pin_memory=True)
+
+        # train the network
+        self.trainer.fit(self.model, loader)
+
+        return self
 
