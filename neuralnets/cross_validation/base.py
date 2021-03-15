@@ -18,11 +18,11 @@ def _correct_type(param, values):
     vs = values.split(';')
     values = []
     for v in vs:
-        if param == 'fm' or param == 'levels' or param == 'epochs':
+        if param == 'feature_maps' or param == 'levels' or param == 'epochs':
             v_ = int(v)
         elif param == 'skip_connections' or param == 'residual_connections':
             v_ = bool(int(v))
-        elif param == 'dropout_enc' or param == 'dropout_dec' or param == 'lr':
+        elif param == 'dropout' or param == 'lr':
             v_ = float(v)
         elif param == 'input_shape':
             v_ = [int(item) for item in v.split(',')]
@@ -132,7 +132,7 @@ class UNet2DClassifier(PLClassifier):
                  train_batch_size=1, test_batch_size=1, num_workers=1, device=0, orientations=(0,),
                  normalization='unit', transform=None, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1),
                  feature_maps=64, levels=4, skip_connections=True, residual_connections=False, norm='instance',
-                 activation='relu', dropout_enc=0.0, dropout_dec=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3):
+                 activation='relu', dropout=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3):
         super().__init__(epochs=epochs, gpus=gpus, accelerator=accelerator, log_dir=log_dir, log_freq=log_freq,
                          log_refresh_rate=log_refresh_rate, train_batch_size=train_batch_size,
                          test_batch_size=test_batch_size, num_workers=num_workers, device=device,
@@ -145,8 +145,7 @@ class UNet2DClassifier(PLClassifier):
         self.levels = levels
         self.skip_connections = skip_connections
         self.residual_connections = residual_connections
-        self.dropout_enc = dropout_enc
-        self.dropout_dec = dropout_dec
+        self.dropout = dropout
         self.norm = norm
         self.activation = activation
         self.coi = coi
@@ -159,8 +158,8 @@ class UNet2DClassifier(PLClassifier):
         # initialize model and trainer
         self.model = UNet2D(input_shape=self.input_shape, in_channels=self.in_channels, feature_maps=self.feature_maps,
                             levels=self.levels, skip_connections=self.skip_connections,
-                            residual_connections=self.residual_connections, dropout_enc=self.dropout_enc,
-                            dropout_dec=self.dropout_dec, norm=self.norm, activation=self.activation, coi=self.coi,
+                            residual_connections=self.residual_connections, dropout_enc=self.dropout,
+                            dropout_dec=self.dropout, norm=self.norm, activation=self.activation, coi=self.coi,
                             loss_fn=self.loss_fn, lr=self.lr)
         self.trainer = pl.Trainer(max_epochs=self.epochs, gpus=self.gpus, accelerator=self.accelerator,
                                   default_root_dir=self.log_dir, flush_logs_every_n_steps=self.log_freq,
