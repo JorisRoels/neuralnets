@@ -553,7 +553,7 @@ class UNet(pl.LightningModule):
         else:  # assuming list-like object
             self.input_shape = input_shape
         self.in_channels = int(in_channels)
-        self.c = in_channels // 2
+        self.c = self.in_channels // 2
         self.coi = coi
         self.out_channels = len(coi)
         self.feature_maps = int(feature_maps)
