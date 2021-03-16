@@ -216,6 +216,11 @@ class LabeledVolumeDataset(VolumeDataset):
         if self.input_shape[0] > 1:
             x, y = x[np.newaxis, ...], y[np.newaxis, ...]
 
+        # select middle slice if multiple consecutive slices
+        if self.in_channels > 1:
+            c = self.in_channels // 2
+            y = y[c:c + 1]
+
         # augment sample
         if self.transform is not None:
             data = self.shared_transform(np.concatenate((x, y), axis=0))
@@ -291,11 +296,13 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
     """
     Dataset for pixel-wise labeled volumes with a sliding window
 
-    :param data_path: path to the dataset
-    :param label_path: path to the labels
+    :param data: path to the dataset
+    :param labels: path to the labels
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
+    :param optional orientations: list of orientations for sampling
     :param optional coi: list or sequence of the classes of interest
     :param optional batch_size: size of the sampling batch
     :param optional data_dtype: type of the data (typically uint8)
@@ -304,11 +311,12 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
     :param optional transform: augmenter object
     """
 
-    def __init__(self, data, labels, input_shape=None, scaling=None, type='tif3d', coi=(0, 1), batch_size=1,
-                 data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None, range_split=None,
-                 range_dir=None):
-        super().__init__(data, input_shape, scaling=scaling, type=type, batch_size=batch_size, dtype=data_dtype,
-                         norm_type=norm_type, range_split=range_split, range_dir=range_dir)
+    def __init__(self, data, labels, input_shape=None, scaling=None, type='tif3d', in_channels=1, orientations=(0,),
+                 coi=(0, 1), batch_size=1, data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None,
+                 range_split=None, range_dir=None):
+        super().__init__(data, input_shape, scaling=scaling, type=type, in_channels=in_channels,
+                         orientations=orientations, batch_size=batch_size, dtype=data_dtype, norm_type=norm_type,
+                         range_split=range_split, range_dir=range_dir)
 
         if isinstance(labels, str):
             self.labels_path = labels
@@ -333,6 +341,9 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
         # pad data so that the dimensions are a multiple of the inputs shapes
         self.labels = pad2multiple(self.labels, input_shape, value=255)
 
+        # pad data so that additional channels can be sampled
+        self.labels = pad_channels(self.labels, in_channels=in_channels, orientations=self.orientations)
+
     def __getitem__(self, i):
 
         # get spatial location
@@ -343,15 +354,22 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
         py = self.input_shape[1] * iy
         px = self.input_shape[2] * ix
 
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data.shape, in_channels=self.in_channels)
+
         # get sample
-        x = self.data[pz:pz + self.input_shape[0], py:py + self.input_shape[1], px:px + self.input_shape[2]]
-        y = self.labels[pz:pz + self.input_shape[0], py:py + self.input_shape[1], px:px + self.input_shape[2]]
+        x, y = sample_labeled_input(self.data, self.labels, input_shape, zyx=(pz, py, px))
         x = normalize(x, type=self.norm_type)
         y = y.astype(float)
 
         # add channel axis if the data is 3D
         if self.input_shape[0] > 1:
             x, y = x[np.newaxis, ...], y[np.newaxis, ...]
+
+        # select middle slice if multiple consecutive slices
+        if self.in_channels > 1:
+            c = self.in_channels // 2
+            y = y[c:c + 1]
 
         # augment sample
         if self.transform is not None:

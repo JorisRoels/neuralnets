@@ -4,20 +4,21 @@ import numpy as np
 import torch
 import torchvision.utils as vutils
 
-from neuralnets.util.io import read_volume
+from neuralnets.util.io import read_volume, mkdir
 
 from scipy.ndimage.morphology import binary_opening
 from torch.utils.tensorboard import SummaryWriter
 from itertools import product
 
 
-def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq', data_shape=None):
+def sample_labeled_input(data, labels, input_shape, zyx=None, preloaded=True, type='pngseq', data_shape=None):
     """
     Generate an input and target sample of certain shape from a labeled dataset
 
     :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param labels: labels to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param input_shape: (z, x, y) shape of the sample
+    :param zyx: (z, x, y) location to be sample (randomly sampled if not provided)
     :param preloaded: boolean that specifies whether the data is already in RAM
     :param type: type of the dataset that should be loaded in RAM (only necessary if preloaded==False)
     :param data_shape: (z, x, y) shape of the dataset to sample from (only necessary if preloaded==False)
@@ -27,32 +28,39 @@ def sample_labeled_input(data, labels, input_shape, preloaded=True, type='pngseq
     # extract input and target patch
     if preloaded:  # if preloaded, we can simply load it from RAM
         # generate random position
-        z = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
-        x = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
-        y = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
+        if zyx is None:
+            z = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
+            y = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
+            x = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
+        else:
+            z, y, x = zyx
 
-        input = data[z:z + input_shape[0], x:x + input_shape[1], y:y + input_shape[2]]
-        target = labels[z:z + input_shape[0], x:x + input_shape[1], y:y + input_shape[2]]
+        input = data[z:z + input_shape[0], y:y + input_shape[1], x:x + input_shape[2]]
+        target = labels[z:z + input_shape[0], y:y + input_shape[1], x:x + input_shape[2]]
     else:  # if not preloaded, we have to additionally load it in RAM
         # generate random position
-        z = np.random.randint(0, data_shape[0] - input_shape[0] + 1)
-        x = np.random.randint(0, data_shape[1] - input_shape[1] + 1)
-        y = np.random.randint(0, data_shape[2] - input_shape[2] + 1)
+        if zyx is None:
+            z = np.random.randint(0, data_shape[0] - input_shape[0] + 1)
+            y = np.random.randint(0, data_shape[1] - input_shape[1] + 1)
+            x = np.random.randint(0, data_shape[2] - input_shape[2] + 1)
+        else:
+            z, y, x = zyx
 
         input = read_volume(data, type=type, start=z, stop=z + input_shape[0])
         target = read_volume(labels, type=type, start=z, stop=z + input_shape[0])
-        input = input[:, x:x + input_shape[1], y:y + input_shape[2]]
-        target = target[:, x:x + input_shape[1], y:y + input_shape[2]]
+        input = input[:, y:y + input_shape[1], x:x + input_shape[2]]
+        target = target[:, y:y + input_shape[1], x:x + input_shape[2]]
 
     return input.copy(), target.copy()
 
 
-def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', data_shape=None):
+def sample_unlabeled_input(data, input_shape, zyx=None, preloaded=True, type='pngseq', data_shape=None):
     """
     Generate an input sample of certain shape from an unlabeled dataset
 
     :param data: data to sample from (a 3D numpy array if preloaded, a directory containing the data else)
     :param input_shape: (z, x, y) shape of the sample
+    :param zyx: (z, x, y) location to be sample (randomly sampled if not provided)
     :param preloaded: boolean that specifies whether the data is already in RAM
     :param type: type of the dataset that should be loaded in RAM (only necessary if preloaded==False)
     :param data_shape: (z, x, y) shape of the dataset to sample from (only necessary if preloaded==False)
@@ -62,19 +70,25 @@ def sample_unlabeled_input(data, input_shape, preloaded=True, type='pngseq', dat
     # extract input and target patch
     if preloaded:  # if preloaded, we can simply load it from RAM
         # generate random position
-        z = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
-        x = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
-        y = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
+        if zyx is None:
+            z = np.random.randint(0, data.shape[0] - input_shape[0] + 1)
+            y = np.random.randint(0, data.shape[1] - input_shape[1] + 1)
+            x = np.random.randint(0, data.shape[2] - input_shape[2] + 1)
+        else:
+            z, y, x = zyx
 
-        input = data[z:z + input_shape[0], x:x + input_shape[1], y:y + input_shape[2]]
+        input = data[z:z + input_shape[0], y:y + input_shape[1], x:x + input_shape[2]]
     else:  # if not preloaded, we have to additionally load it in RAM
         # generate random position
-        z = np.random.randint(0, data_shape[0] - input_shape[0] + 1)
-        x = np.random.randint(0, data_shape[1] - input_shape[1] + 1)
-        y = np.random.randint(0, data_shape[2] - input_shape[2] + 1)
+        if zyx is None:
+            z = np.random.randint(0, data_shape[0] - input_shape[0] + 1)
+            y = np.random.randint(0, data_shape[1] - input_shape[1] + 1)
+            x = np.random.randint(0, data_shape[2] - input_shape[2] + 1)
+        else:
+            z, y, x = zyx
 
         input = read_volume(data, type=type, start=z, stop=z + input_shape[0])
-        input = input[:, x:x + input_shape[1], y:y + input_shape[2]]
+        input = input[:, y:y + input_shape[1], x:x + input_shape[2]]
 
     return input.copy()
 
@@ -410,7 +424,7 @@ def log_images_3d(images, names, writer, epoch=0, scale_each=True):
 
 
 def log_hparams(gs, log_dir='logs'):
-    mkdir(hparams_dir)
+    mkdir(log_dir)
     parameters = gs.param_grid
     param_keys = list(parameters.keys())
     param_values = [v for v in parameters.values()]

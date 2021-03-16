@@ -59,6 +59,21 @@ def pad2multiple(x, input_shape, value=0):
     return x
 
 
+def pad_channels(x, in_channels=1, orientations=(0,)):
+
+    pad_width = []
+    for d in range(3):
+        ts = 0
+        if d in orientations:
+            ts = in_channels - 1
+        pad_width.append((0, ts))
+    pad_width = tuple(pad_width)
+
+    x = np.pad(x, pad_width=pad_width, mode='edge')
+
+    return x
+
+
 def slice_subset(x, range, orientation):
     if range is not None and orientation is not None:
         start, stop = range
@@ -195,6 +210,8 @@ class SlidingWindowDataset(data.Dataset):
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: tuple used for rescaling the data, or None
     :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
+    :param optional orientations: list of orientations for sampling
     :param optional batch_size: size of the sampling batch
     :param optional dtype: type of the data (typically uint8)
     :param optional norm_type: type of the normalization (unit, z or minmax)
@@ -202,8 +219,8 @@ class SlidingWindowDataset(data.Dataset):
     :param optional range_dir: orientation of the slicing
     """
 
-    def __init__(self, data, input_shape, scaling=None, type='tif3d', batch_size=1, dtype='uint8',
-                 norm_type='unit', range_split=None, range_dir=None):
+    def __init__(self, data, input_shape, scaling=None, type='tif3d', in_channels=1, orientations=(0,), batch_size=1,
+                 dtype='uint8', norm_type='unit', range_split=None, range_dir=None):
         if isinstance(data, str):
             self.data_path = data
             # load the data
@@ -211,6 +228,8 @@ class SlidingWindowDataset(data.Dataset):
         else:
             self.data = data
         self.input_shape = input_shape
+        self.in_channels = in_channels
+        self.orientations = orientations
         self.scaling = scaling
         self.batch_size = batch_size
         self.norm_type = norm_type
@@ -237,6 +256,9 @@ class SlidingWindowDataset(data.Dataset):
             self.n_samples_dim.append(self.data.shape[d] // self.input_shape[d])
             sz *= self.n_samples_dim[-1]
         self.n_samples = sz
+
+        # pad data so that the dimensions are a multiple of the inputs shapes
+        self.data = pad_channels(self.data, in_channels=in_channels, orientations=self.orientations)
 
     def __getitem__(self, i):
         pass

@@ -45,13 +45,16 @@ if __name__ == '__main__':
     split = params['train_val_test_split']
     transform = Compose([Rotate90(), Flip(prob=0.5, dim=0), Flip(prob=0.5, dim=1), ContrastAdjust(adj=0.1),
                          RandomDeformation(), AddNoise(sigma_max=0.05), CleanDeformedLabels(params['coi'])])
-    train = LabeledVolumeDataset(params['data'], params['labels'], input_shape=input_shape, type=params['type'],
+    train = LabeledVolumeDataset(params['data'], params['labels'], input_shape=input_shape,
+                                 in_channels=params['in_channels'], type=params['type'],
                                  batch_size=params['train_batch_size'], transform=transform, range_split=(0, split[0]),
                                  range_dir=params['split_orientation'])
-    val = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape, type=params['type'],
+    val = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape,
+                                      in_channels=params['in_channels'], type=params['type'],
                                       batch_size=params['test_batch_size'], range_split=(split[0], split[1]),
                                       range_dir=params['split_orientation'])
-    test = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape, type=params['type'],
+    test = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape,
+                                       in_channels=params['in_channels'], type=params['type'],
                                        batch_size=params['test_batch_size'], range_split=(split[1], 1),
                                        range_dir=params['split_orientation'])
     train_loader = DataLoader(train, batch_size=params['train_batch_size'], num_workers=params['num_workers'],
@@ -65,9 +68,9 @@ if __name__ == '__main__':
         Build the network
     """
     print_frm('Building the network')
-    net = UNet2D(feature_maps=params['fm'], levels=params['levels'], dropout_enc=params['dropout'],
-                 dropout_dec=params['dropout'], norm=params['norm'], activation=params['activation'], coi=params['coi'],
-                 loss_fn=params['loss'])
+    net = UNet2D(in_channels=params['in_channels'], feature_maps=params['fm'], levels=params['levels'],
+                 dropout_enc=params['dropout'], dropout_dec=params['dropout'], norm=params['norm'],
+                 activation=params['activation'], coi=params['coi'], loss_fn=params['loss'])
 
     """
         Train the network
