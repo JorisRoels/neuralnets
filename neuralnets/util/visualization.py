@@ -3,6 +3,16 @@ from skimage.measure import label
 from skimage.segmentation import mark_boundaries
 
 
+COLORS = [
+    (1, 0, 0),
+    (0, 1, 0),
+    (0, 0, 1),
+    (1, 1, 0),
+    (0, 1, 1),
+    (1, 0, 1)
+]
+
+
 def overlay(x, y, colors=None, alpha=0.2, boundaries=False):
     """
     Overlay an image with a segmentation map

@@ -9,6 +9,7 @@ from neuralnets.util.tools import *
 from neuralnets.util.augmentation import *
 from neuralnets.util.losses import get_loss_function
 from neuralnets.util.validation import segment, validate
+from neuralnets.util.visualization import overlay, COLORS
 
 
 class UNetEncoder(nn.Module):
@@ -567,6 +568,9 @@ class UNet(pl.LightningModule):
         self.loss_fn = get_loss_function(loss_fn)
         self.lr = float(lr)
 
+        self.train_batch_id = 0
+        self.val_batch_id = 0
+
     def forward(self, x):
 
         # contractive path
@@ -598,7 +602,7 @@ class UNet(pl.LightningModule):
         self.log('train/loss', loss)
 
         # log images
-        if batch_idx == 0:
+        if batch_idx == self.train_batch_id:
             self._log_predictions(x, y, y_pred, prefix='train')
 
         return loss
@@ -624,7 +628,7 @@ class UNet(pl.LightningModule):
         self.log('val/loss', loss)
 
         # log images
-        if batch_idx == 0:
+        if batch_idx == self.val_batch_id:
             self._log_predictions(x, y, y_pred, prefix='val')
 
         return loss
@@ -659,6 +663,8 @@ class UNet(pl.LightningModule):
 
     def on_epoch_start(self):
         set_seed(rnd.randint(100000))
+        self.train_batch_id = rnd.randint(self.trainer.num_training_batches)
+        self.val_batch_id = rnd.randint(self.trainer.num_val_batches[0])
 
     def on_epoch_end(self):
         torch.save(self.state_dict(), os.path.join(self.logger.log_dir, 'checkpoints', 'epoch=%d-step=%d.ckpt' %
@@ -685,16 +691,28 @@ class UNet(pl.LightningModule):
         return np.mean(js)
 
     def _log_predictions(self, x, y, y_pred, prefix='train'):
+
+        # get the tensorboard summary writer
         tensorboard = self.logger.experiment
+
+        # select the center slice if 3D
         if x.ndim == 4:  # 2D data
-            tensorboard.add_image(prefix + '/input', x[0, 0:1], global_step=self.current_epoch)
-            tensorboard.add_image(prefix + '/target', y[0, 0:1], global_step=self.current_epoch)
-            tensorboard.add_image(prefix + '/pred', y_pred[0, 1:2], global_step=self.current_epoch)
+            x = x[:, x.size(1) // 2, :, :]
+            y = y[:, 0, :, :]
+            y_ = np.argmax(y_pred.detach().cpu().numpy(), axis=1)
         else:  # 3D data
             s = x.size(2) // 2
-            tensorboard.add_image(prefix + '/input', x[0, 0, s:s+1], global_step=self.current_epoch)
-            tensorboard.add_image(prefix + '/target', y[0, 0, s:s+1], global_step=self.current_epoch)
-            tensorboard.add_image(prefix + '/pred', y_pred[0, 1, s:s+1], global_step=self.current_epoch)
+            x = x[:, 0, s, :, :]
+            y = y[:, 0, s, :, :]
+            y_ = np.argmax(y_pred[:, :, s].detach().cpu().numpy(), axis=1)
+
+        # overlay the image with the labels (boundary) and predictions (pixel-wise)
+        x_ = np.zeros((x.size(0), x.size(1), x.size(2), 3))
+        for b in range(x.size(0)):
+            tmp = overlay(x[b].cpu().numpy(), y[b].cpu().numpy(), colors=COLORS, boundaries=True)
+            x_[b] = overlay(tmp, y_[b], colors=COLORS)
+
+        tensorboard.add_images(prefix + '/prediction', x_, global_step=self.current_epoch, dataformats='NHWC')
 
 
 class UNet2D(UNet):
