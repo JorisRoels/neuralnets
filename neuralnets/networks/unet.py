@@ -548,10 +548,10 @@ class UNet(pl.LightningModule):
         super().__init__()
 
         # parameters
-        if isinstance(input_shape, tuple):
-            self.input_shape = input_shape
-        else:  # assuming string object
+        if isinstance(input_shape, str):
             self.input_shape = [int(item) for item in input_shape.split(',')]
+        else:  # assuming list-like object
+            self.input_shape = input_shape
         self.in_channels = int(in_channels)
         self.c = in_channels // 2
         self.coi = coi
