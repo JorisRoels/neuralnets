@@ -664,7 +664,8 @@ class UNet(pl.LightningModule):
     def on_epoch_start(self):
         set_seed(rnd.randint(100000))
         self.train_batch_id = rnd.randint(self.trainer.num_training_batches)
-        self.val_batch_id = rnd.randint(self.trainer.num_val_batches[0])
+        if len(self.trainer.num_val_batches) > 0:
+            self.val_batch_id = rnd.randint(self.trainer.num_val_batches[0])
 
     def on_epoch_end(self):
         torch.save(self.state_dict(), os.path.join(self.logger.log_dir, 'checkpoints', 'epoch=%d-step=%d.ckpt' %
