@@ -316,7 +316,7 @@ class CleanDeformedLabels(object):
     """
 
     def __init__(self, coi):
-        self.coi = coi
+        self.coi = np.arange(len(coi))
 
     def __call__(self, x):
 

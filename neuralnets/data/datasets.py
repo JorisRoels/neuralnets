@@ -67,6 +67,22 @@ def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, level
     return tuple(input_shape)
 
 
+def _map_cois(y, coi):
+    """
+    Maps the classes of interest to consecutive label indices
+
+    :param y: labels
+    :param coi: classes of interest
+    :return: reindexed labels
+    """
+    coi_ = list(coi)
+    coi_.sort()
+    for i, c in enumerate(coi_):
+        y[y == c] = i
+
+    return y
+
+
 class LabeledStandardDataset(StandardDataset):
     """
     Strongly labeled dataset of N 2D images and pixel-wise labels
@@ -192,6 +208,9 @@ class LabeledVolumeDataset(VolumeDataset):
             target_size = np.asarray(np.multiply(self.labels.shape, scaling), dtype=int)
             self.labels = F.interpolate(torch.Tensor(self.labels[np.newaxis, np.newaxis, ...]), size=tuple(target_size),
                                         mode='area')[0, 0, ...].numpy()
+
+        # relabel classes of interest
+        self.labels = _map_cois(self.labels, self.coi)
 
     def __getitem__(self, i, attempt=0):
 
@@ -343,6 +362,9 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
 
         # pad data so that additional channels can be sampled
         self.labels = pad_channels(self.labels, in_channels=in_channels, orientations=self.orientations)
+
+        # relabel classes of interest
+        self.labels = _map_cois(self.labels, self.coi)
 
     def __getitem__(self, i):
 
