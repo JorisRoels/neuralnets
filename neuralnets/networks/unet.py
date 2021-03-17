@@ -212,12 +212,12 @@ class UNetDecoder2D(UNetDecoder):
 
         outputs = inputs
         for i in range(self.levels):
-            if self.skip_connections:
-                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
-                                                                       outputs)  # also deals with concat
-            elif self.residual_connections:
+            if self.residual_connections:
                 outputs = encoder_outputs[self.levels - i - 1] + \
                           getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # residual connection
+            elif self.skip_connections:
+                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
+                                                                       outputs)  # also deals with concat
             else:
                 outputs = getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # no concat
             outputs = getattr(self.features, 'convblock%d' % (i + 1))(outputs)
@@ -273,12 +273,12 @@ class UNetDecoder3D(UNetDecoder):
 
         outputs = inputs
         for i in range(self.levels):
-            if self.skip_connections:
-                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
-                                                                       outputs)  # also deals with concat
-            elif self.residual_connections:
+            if self.residual_connections:
                 outputs = encoder_outputs[self.levels - i - 1] + \
                           getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # residual connection
+            elif self.skip_connections:
+                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
+                                                                       outputs)  # also deals with concat
             else:
                 outputs = getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # no concat
             outputs = getattr(self.features, 'convblock%d' % (i + 1))(outputs)
@@ -457,12 +457,12 @@ class DenseUNetDecoder2D(UNetDecoder):
 
         outputs = inputs
         for i in range(self.levels):
-            if self.skip_connections:
-                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
-                                                                       outputs)  # also deals with concat
-            elif self.residual_connections:
+            if self.residual_connections:
                 outputs = encoder_outputs[self.levels - i - 1] + \
                           getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # residual connection
+            elif self.skip_connections:
+                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
+                                                                       outputs)  # also deals with concat
             else:
                 outputs = getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # no concat
             outputs = getattr(self.features, 'convblock%d' % (i + 1))(outputs)
@@ -525,12 +525,12 @@ class DenseUNetDecoder3D(UNetDecoder):
 
         outputs = inputs
         for i in range(self.levels):
-            if self.skip_connections:
-                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
-                                                                       outputs)  # also deals with concat
-            elif self.residual_connections:
+            if self.residual_connections:
                 outputs = encoder_outputs[self.levels - i - 1] + \
                           getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # residual connection
+            elif self.skip_connections:
+                outputs = getattr(self.features, 'upconv%d' % (i + 1))(encoder_outputs[self.levels - i - 1],
+                                                                       outputs)  # also deals with concat
             else:
                 outputs = getattr(self.features, 'upconv%d' % (i + 1))(outputs)  # no concat
             outputs = getattr(self.features, 'convblock%d' % (i + 1))(outputs)
