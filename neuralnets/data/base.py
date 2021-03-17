@@ -159,12 +159,15 @@ class VolumeDataset(data.Dataset):
         else:
             self.data = data
         self.input_shape = input_shape
-        self.scaling = scaling
-        self.len_epoch = len_epoch
-        self.in_channels = in_channels
-        self.orientations = orientations
+        self.scaling = float(scaling) if scaling is not None else scaling
+        self.len_epoch = int(len_epoch) if len_epoch is not None else len_epoch
+        self.in_channels = int(in_channels)
+        if isinstance(orientations, str):
+            self.orientations = [int(item) for item in orientations.split(',')]
+        else:
+            self.orientations = orientations
         self.orientation = 0
-        self.batch_size = batch_size
+        self.batch_size = int(batch_size)
         self.norm_type = norm_type
         self.range_split = range_split
         self.range_dir = range_dir
@@ -228,9 +231,14 @@ class SlidingWindowDataset(data.Dataset):
         else:
             self.data = data
         self.input_shape = input_shape
-        self.in_channels = in_channels
-        self.orientations = orientations
-        self.scaling = scaling
+        self.scaling = float(scaling) if scaling is not None else scaling
+        self.in_channels = int(in_channels)
+        if isinstance(orientations, str):
+            self.orientations = [int(item) for item in orientations.split(',')]
+        else:
+            self.orientations = orientations
+        self.orientation = 0
+        self.batch_size = int(batch_size)
         self.batch_size = batch_size
         self.norm_type = norm_type
         self.range_split = range_split

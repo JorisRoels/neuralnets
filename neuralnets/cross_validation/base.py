@@ -161,14 +161,14 @@ class UNet2DClassifier(PLClassifier):
                             residual_connections=self.residual_connections, dropout_enc=self.dropout,
                             dropout_dec=self.dropout, norm=self.norm, activation=self.activation, coi=self.coi,
                             loss_fn=self.loss_fn, lr=self.lr)
-        self.trainer = pl.Trainer(max_epochs=self.epochs, gpus=self.gpus, accelerator=self.accelerator,
+        self.trainer = pl.Trainer(max_epochs=int(self.epochs), gpus=self.gpus, accelerator=self.accelerator,
                                   default_root_dir=self.log_dir, flush_logs_every_n_steps=self.log_freq,
                                   log_every_n_steps=self.log_freq, callbacks=self.callbacks,
                                   progress_bar_refresh_rate=self.log_refresh_rate)
 
         # construct dataloader
-        train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, batch_size=self.train_batch_size,
-                                     transform=self.transform)
+        train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, in_channels=self.in_channels,
+                                     batch_size=self.train_batch_size, transform=self.transform)
         loader = DataLoader(train, batch_size=self.train_batch_size, num_workers=self.num_workers, pin_memory=True)
 
         # train the network
@@ -212,14 +212,14 @@ class UNet3DClassifier(PLClassifier):
                             residual_connections=self.residual_connections, dropout_enc=self.dropout,
                             dropout_dec=self.dropout, norm=self.norm, activation=self.activation, coi=self.coi,
                             loss_fn=self.loss_fn, lr=self.lr)
-        self.trainer = pl.Trainer(max_epochs=self.epochs, gpus=self.gpus, accelerator=self.accelerator,
+        self.trainer = pl.Trainer(max_epochs=int(self.epochs), gpus=self.gpus, accelerator=self.accelerator,
                                   default_root_dir=self.log_dir, flush_logs_every_n_steps=self.log_freq,
                                   log_every_n_steps=self.log_freq, callbacks=self.callbacks,
                                   progress_bar_refresh_rate=self.log_refresh_rate)
 
         # construct dataloader
-        train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, batch_size=self.train_batch_size,
-                                     transform=self.transform)
+        train = LabeledVolumeDataset(X, y, input_shape=self.model.input_shape, in_channels=self.in_channels,
+                                     batch_size=self.train_batch_size, transform=self.transform)
         loader = DataLoader(train, batch_size=self.train_batch_size, num_workers=self.num_workers, pin_memory=True)
 
         # train the network
