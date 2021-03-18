@@ -1,13 +1,11 @@
-from copy import copy
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage import measure
-
-from neuralnets.data.datasets import LabeledStandardDataset, LabeledVolumeDataset, LabeledMultiVolumeDataset
+from copy import copy
 
 from neuralnets.util.tools import tensor_to_device
 
@@ -406,32 +404,3 @@ def get_loss_function(s):
         return nn.MSELoss(**params)
     elif name == "kld":
         return KLDLoss(**params)
-
-
-def get_balancing_weights(dataset):
-    """
-    Returns a set of balancing weights for a specific labeled dataset
-
-    :param dataset: labeled dataset instance of
-                        - neuralnets.data.datasets.LabeledStandardDataset
-                        - neuralnets.data.datasets.LabeledVolumeDataset
-                        - neuralnets.data.datasets.LabeledMultiVolumeDataset
-    :return: a tuple of balancing weights, if an unsuitable object is provided, it returns None
-    """
-
-    if isinstance(dataset, LabeledStandardDataset) or isinstance(dataset, LabeledVolumeDataset):
-        weight = np.zeros((len(dataset.coi)))
-        for i, c in enumerate(dataset.coi):
-            weight[i] = 1 / np.count_nonzero(dataset.labels == c)
-        weight = weight / np.sum(weight)
-        return tuple(weight)
-    elif isinstance(dataset, LabeledMultiVolumeDataset):
-        freq = np.zeros((len(dataset.coi)))
-        for i, c in enumerate(dataset.coi):
-            for labels in dataset.labels:
-                freq[i] += np.count_nonzero(labels == c)
-        weight = 1 / freq
-        weight = weight / np.sum(weight)
-        return weight
-
-    return None

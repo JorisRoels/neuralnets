@@ -425,13 +425,11 @@ def log_images_3d(images, names, writer, epoch=0, scale_each=True):
 
 def log_hparams(gs, log_dir='logs'):
     mkdir(log_dir)
-    parameters = gs.param_grid
-    param_keys = list(parameters.keys())
-    param_values = [v for v in parameters.values()]
+    params = gs.cv_results_['params']
     metrics = gs.cv_results_['mean_test_score']
-    for j, params_val in enumerate(product(*param_values)):
+    for j, p_dict in enumerate(params):
         tb = SummaryWriter(log_dir=log_dir)
-        p_dict = {key: params_val[i] for i, key in enumerate(param_keys)}
+        p_dict = {key: str(p_dict[key]) for key in list(p_dict.keys())}
         m_dict = {'mIoU': metrics[j]}
         tb.add_hparams(p_dict, m_dict)
         tb.close()
