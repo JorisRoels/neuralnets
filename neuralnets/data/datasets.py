@@ -69,6 +69,65 @@ def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, level
     return tuple(input_shape)
 
 
+def _select_labels(y, frac=1.0):
+    """
+    Selects a fraction of the labels in a dataset. We do this by randomly selecting a crop from the data that has
+    a similar label distribution compared to the original volume.
+
+    :param y:
+    :param frac:
+    :return:
+    """
+
+    def _find_optimum(x, target, n, labels, dim):
+
+        # compute amount of labeled pixels
+        x_ = int(labels.shape[dim] * x)
+        if dim == 0:
+            v = np.sum(labels[:x_, :, :])
+        elif dim == 1:
+            v = np.sum(labels[:, :x_, :])
+        else:
+            v = np.sum(labels[:, :, :x_])
+
+        # check if we can still progress
+        if 2 ** (-n) < (1 / labels.shape[dim]):
+            return int(labels.shape[dim] * x)
+
+        # check if target value is smaller or higher
+        if v < target:
+            return _find_optimum(x + 2 ** (-n), target, n + 1, labels, dim)
+        elif v > target:
+            return _find_optimum(x - 2 ** (-n), target, n + 1, labels, dim)
+        else:
+            return int(labels.shape[dim] * x)
+
+    if frac == 0:
+        y_ = np.zeros_like(y) + 255
+    elif frac == 1:
+        y_ = y
+    else:
+        # get the frequency of all unique class labels
+        u, cnts = np.unique(y, return_counts=True)
+        # select the classes
+        coi = u[u != 255]
+        cnts = cnts[u != 255]
+        # get the target counts
+        target_cnts = (cnts * frac).astype(int)
+        # initialize the new labels
+        y_ = np.zeros_like(y) + 255
+        for i, c in enumerate(coi):  # for each class of interest
+            # find the optimal slice split index
+            yc = np.asarray(y == c)
+            r = _find_optimum(0.5, target_cnts[i], 2, yc, 0)
+            # make sure it is at least 1
+            r = max(1, r)
+            # select the class pixels
+            y_[:r][y[:r] == c] = c
+
+    return y_
+
+
 def _map_cois(y, coi):
     """
     Maps the classes of interest to consecutive label indices
@@ -197,12 +256,13 @@ class LabeledVolumeDataset(VolumeDataset):
             - joint: the dataset will generate random samples in each dataset and return all of them
             - single: the dataset will generate a random sample from a randomly selected dataset and return that
     :param optional return_domain: return the domain id during iterating
+    :param optional partial_labels: fraction of the labels that should be selected (default: 1)
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
                  norm_type='unit', transform=None, range_split=None, range_dir=None, resolution=None,
-                 match_resolution_to=None, sampling_type='joint', return_domain=False):
+                 match_resolution_to=None, sampling_type='joint', return_domain=False, partial_labels=1):
         super().__init__(data, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
                          in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
                          norm_type=norm_type, range_split=range_split, range_dir=range_dir, resolution=resolution,
@@ -221,6 +281,7 @@ class LabeledVolumeDataset(VolumeDataset):
         self.transform = transform
         if transform is not None:
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
+        self.partial_labels = partial_labels
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
@@ -241,6 +302,9 @@ class LabeledVolumeDataset(VolumeDataset):
                         scale_factor = self.scaling
                 labels_it = torch.Tensor(self.labels[i]).unsqueeze(0).unsqueeze(0)
                 self.labels[i] = F.interpolate(labels_it, scale_factor=scale_factor, mode='bilinear')[0, 0, ...].numpy()
+
+        # select a subset of the labels if necessary
+        self.labels = [_select_labels(l, frac=self.partial_labels) for l in self.labels]
 
         # relabel classes of interest
         self.labels = [_map_cois(l, self.coi) for l in self.labels]
@@ -471,11 +535,13 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
     :param optional resolution: list of 3-tuples specifying the pixel resolution of the data
     :param optional match_resolution_to: match the resolution of all data to a specific dataset
     :param optional return_domain: return the domain id during iterating
+    :param optional partial_labels: fraction of the labels that should be selected (default: 1)
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, type='tif3d', in_channels=1, orientations=(0,),
                  coi=(0, 1), batch_size=1, data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None,
-                 range_split=None, range_dir=None, resolution=None, match_resolution_to=None, return_domain=False):
+                 range_split=None, range_dir=None, resolution=None, match_resolution_to=None, return_domain=False,
+                 partial_labels=1):
         super().__init__(data, input_shape, scaling=scaling, type=type, in_channels=in_channels,
                          orientations=orientations, batch_size=batch_size, dtype=data_dtype, norm_type=norm_type,
                          range_split=range_split, range_dir=range_dir, resolution=resolution,
@@ -493,6 +559,7 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
         self.transform = transform
         if transform is not None:
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
+        self.partial_labels = partial_labels
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
@@ -513,6 +580,9 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
                         scale_factor = self.scaling
                 labels_it = torch.Tensor(self.labels[i]).unsqueeze(0).unsqueeze(0)
                 self.labels[i] = F.interpolate(labels_it, scale_factor=scale_factor, mode='bilinear')[0, 0, ...].numpy()
+
+        # select a subset of the labels if necessary
+        self.labels = [_select_labels(l, frac=self.partial_labels) for l in self.labels]
 
         # pad data so that the dimensions are a multiple of the inputs shapes
         self.labels = [pad2multiple(l, input_shape, value=255) for l in self.labels]

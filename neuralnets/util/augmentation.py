@@ -320,12 +320,15 @@ class CleanDeformedLabels(object):
 
     def __call__(self, x):
 
-        d = np.zeros((len(self.coi), *x.shape), dtype=x.dtype)
-        for i, c in enumerate(self.coi):
+        coi = [c for c in self.coi]
+        coi.append(255)
+
+        d = np.zeros((len(coi), *x.shape), dtype=x.dtype)
+        for i, c in enumerate(coi):
             d[i] = np.abs(x - c)
         d = np.argmin(d, axis=0)
 
-        for i, c in enumerate(self.coi):
+        for i, c in enumerate(coi):
             x[d == i] = c
 
         return x

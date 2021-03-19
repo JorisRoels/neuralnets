@@ -3,14 +3,14 @@ from skimage.measure import label
 from skimage.segmentation import mark_boundaries
 
 
-COLORS = [
-    (1, 0, 0),
-    (0, 1, 0),
-    (0, 0, 1),
-    (1, 1, 0),
-    (0, 1, 1),
-    (1, 0, 1)
-]
+COLORS = np.zeros((256, 3))
+COLORS[0] = (1, 0, 0)
+COLORS[1] = (0, 1, 0)
+COLORS[2] = (0, 0, 1)
+COLORS[3] = (1, 1, 0)
+COLORS[4] = (0, 1, 1)
+COLORS[5] = (1, 0, 1)
+COLORS[255] = (0.5, 0.5, 0.5)
 
 
 def overlay(x, y, colors=None, alpha=0.2, boundaries=False):
