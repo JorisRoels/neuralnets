@@ -222,7 +222,7 @@ class LabeledVolumeDataset(VolumeDataset):
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
-            if isinstance(range_split, list) and isinstance(range_dir, list):
+            if isinstance(range_split, list) and isinstance(range_dir, tuple):
                 self.labels[i] = slice_subset(self.labels[i], range_split[i], range_dir[i])
             else:
                 self.labels[i] = slice_subset(self.labels[i], range_split, range_dir)
@@ -233,7 +233,7 @@ class LabeledVolumeDataset(VolumeDataset):
                 if self.resolution is not None and self.match_resolution_to is not None:
                     scale_factor = np.divide(self.labels[self.match_resolution_to].shape, self.labels[i].shape)
                 else:
-                    if isinstance(self.scaling, list):
+                    if isinstance(self.scaling, list) or isinstance(self.scaling, tuple):
                         scale_factor = self.scaling[i]
                     else:
                         scale_factor = self.scaling
@@ -488,7 +488,7 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
-            if isinstance(range_split, list) and isinstance(range_dir, list):
+            if isinstance(range_split, list) and isinstance(range_dir, tuple):
                 self.labels[i] = slice_subset(self.labels[i], range_split[i], range_dir[i])
             else:
                 self.labels[i] = slice_subset(self.labels[i], range_split, range_dir)
@@ -499,7 +499,7 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
                 if self.resolution is not None and self.match_resolution_to is not None:
                     scale_factor = np.divide(self.labels[self.match_resolution_to].shape, self.labels[i].shape)
                 else:
-                    if isinstance(self.scaling, list):
+                    if isinstance(self.scaling, list) or isinstance(self.scaling, tuple):
                         scale_factor = self.scaling[i]
                     else:
                         scale_factor = self.scaling

@@ -228,7 +228,7 @@ class VolumeDataset(data.Dataset):
                 if self.resolution is not None and self.match_resolution_to is not None:
                     scale_factor = np.divide(self.data[self.match_resolution_to].shape, self.data[i].shape)
                 else:
-                    if isinstance(self.scaling, list):
+                    if isinstance(self.scaling, list) or isinstance(self.scaling, tuple):
                         scale_factor = self.scaling[i]
                     else:
                         scale_factor = self.scaling
