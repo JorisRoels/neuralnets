@@ -591,13 +591,10 @@ class UNet(pl.LightningModule):
 
         # compute loss
         loss = self.loss_fn(y_pred, y[:, 0, ...])
+        y_pred = torch.softmax(y_pred, dim=1)
 
         # compute iou
-        mIoU = 0
-        y_pred = torch.softmax(y_pred, dim=1)
-        for c in range(y_pred.size(1)):
-            mIoU += iou(y_pred[:, c:c+1, ...], y == c, w=(y != 255))
-        mIoU /= y_pred.size(1)
+        mIoU = self._mIoU(y_pred, y)
         self.log('train/mIoU', mIoU, prog_bar=True)
         self.log('train/loss', loss)
 
@@ -617,13 +614,10 @@ class UNet(pl.LightningModule):
 
         # compute loss
         loss = self.loss_fn(y_pred, y[:, 0, ...])
+        y_pred = torch.softmax(y_pred, dim=1)
 
         # compute iou
-        mIoU = 0
-        y_pred = torch.softmax(y_pred, dim=1)
-        for c in range(y_pred.size(1)):
-            mIoU += iou(y_pred[:, c:c+1, ...], y == c, w=(y != 255))
-        mIoU /= y_pred.size(1)
+        mIoU = self._mIoU(y_pred, y)
         self.log('val/mIoU', mIoU, prog_bar=True)
         self.log('val/loss', loss)
 
@@ -643,13 +637,10 @@ class UNet(pl.LightningModule):
 
         # compute loss
         loss = self.loss_fn(y_pred, y[:, 0, ...])
+        y_pred = torch.softmax(y_pred, dim=1)
 
         # compute iou
-        mIoU = 0
-        y_pred = torch.softmax(y_pred, dim=1)
-        for c in range(y_pred.size(1)):
-            mIoU += iou(y_pred[:, c:c+1, ...], y == c, w=(y != 255))
-        mIoU /= y_pred.size(1)
+        mIoU = self._mIoU(y_pred, y)
         self.log('test/mIoU', mIoU, prog_bar=True)
         self.log('test/loss', loss)
 
@@ -690,6 +681,15 @@ class UNet(pl.LightningModule):
                            normalization=normalization, hausdorff=hausdorff, report=report)
 
         return np.mean(js)
+
+    def _mIoU(self, y_pred, y):
+
+        mIoU = 0
+        for c in range(y_pred.size(1)):
+            mIoU += iou(y_pred[:, c:c+1, ...], y == c, w=(y != 255))
+        mIoU /= y_pred.size(1)
+
+        return mIoU
 
     def _log_predictions(self, x, y, y_pred, prefix='train'):
 
