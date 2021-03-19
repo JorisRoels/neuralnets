@@ -196,16 +196,18 @@ class LabeledVolumeDataset(VolumeDataset):
     :param optional sampling_type: type of sampling in case of multiple datasets
             - joint: the dataset will generate random samples in each dataset and return all of them
             - single: the dataset will generate a random sample from a randomly selected dataset and return that
+    :param optional return_domain: return the domain id during iterating
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
                  norm_type='unit', transform=None, range_split=None, range_dir=None, resolution=None,
-                 match_resolution_to=None, sampling_type='joint'):
+                 match_resolution_to=None, sampling_type='joint', return_domain=False):
         super().__init__(data, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
                          in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
                          norm_type=norm_type, range_split=range_split, range_dir=range_dir, resolution=resolution,
-                         match_resolution_to=match_resolution_to, sampling_type=sampling_type)
+                         match_resolution_to=match_resolution_to, sampling_type=sampling_type,
+                         return_domain=return_domain)
 
         if isinstance(labels, str) or isinstance(labels, np.ndarray):
             self.labels = [load_data(labels, data_type=type, dtype=label_dtype)]
@@ -322,6 +324,8 @@ class LabeledVolumeDataset(VolumeDataset):
                 x = xs
                 y = ys
 
+            r = np.arange(len(self.data), dtype=int)
+
             # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             if np.sum([len(np.intersect1d(torch.unique(y_).numpy(), self.coi)) for y_ in ys]) == 0 and not self.warned:
                 if attempt < MAX_SAMPLING_ATTEMPTS:
@@ -331,7 +335,10 @@ class LabeledVolumeDataset(VolumeDataset):
                     self.warned = True
 
         # return sample
-        return x, y
+        if self.return_domain:
+            return r, x, y
+        else:
+            return x, y
 
 
 class UnlabeledVolumeDataset(VolumeDataset):
@@ -463,15 +470,16 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
     :param optional range_dir: orientation of the slicing or a list of orientations in case of multiple datasets
     :param optional resolution: list of 3-tuples specifying the pixel resolution of the data
     :param optional match_resolution_to: match the resolution of all data to a specific dataset
+    :param optional return_domain: return the domain id during iterating
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, type='tif3d', in_channels=1, orientations=(0,),
                  coi=(0, 1), batch_size=1, data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None,
-                 range_split=None, range_dir=None, resolution=None, match_resolution_to=None):
+                 range_split=None, range_dir=None, resolution=None, match_resolution_to=None, return_domain=False):
         super().__init__(data, input_shape, scaling=scaling, type=type, in_channels=in_channels,
                          orientations=orientations, batch_size=batch_size, dtype=data_dtype, norm_type=norm_type,
                          range_split=range_split, range_dir=range_dir, resolution=resolution,
-                         match_resolution_to=match_resolution_to)
+                         match_resolution_to=match_resolution_to, return_domain=return_domain)
 
         if isinstance(labels, str) or isinstance(labels, np.ndarray):
             self.labels = [load_data(labels, data_type=type, dtype=label_dtype)]
@@ -566,4 +574,7 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
             self.warned = True
 
         # return sample
-        return x, y
+        if self.return_domain:
+            return r, x, y
+        else:
+            return x, y

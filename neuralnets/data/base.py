@@ -167,11 +167,12 @@ class VolumeDataset(data.Dataset):
     :param optional sampling_type: type of sampling in case of multiple datasets
             - joint: the dataset will generate random samples in each dataset and return all of them
             - single: the dataset will generate a random sample from a randomly selected dataset and return that
+    :param optional return_domain: return the domain id during iterating
     """
 
     def __init__(self, data, input_shape, scaling=None, len_epoch=None, type='tif3d', in_channels=1, orientations=(0,),
                  batch_size=1, dtype='uint8', norm_type='unit', range_split=None, range_dir=None, resolution=None,
-                 match_resolution_to=None, sampling_type='joint'):
+                 match_resolution_to=None, sampling_type='joint', return_domain=False):
 
         if isinstance(data, str) or isinstance(data, np.ndarray):
             self.data = [load_data(data, data_type=type, dtype=dtype)]
@@ -197,6 +198,7 @@ class VolumeDataset(data.Dataset):
         self.resolution = resolution
         self.match_resolution_to = match_resolution_to
         self.sampling_type = sampling_type
+        self.return_domain = return_domain
         self.warned = False
 
         # select a subset of slices of the data
@@ -267,11 +269,12 @@ class SlidingWindowDataset(data.Dataset):
     :param optional range_dir: orientation of the slicing or a list of orientations in case of multiple datasets
     :param optional resolution: list of 3-tuples specifying the pixel resolution of the data
     :param optional match_resolution_to: match the resolution of all data to a specific dataset
+    :param optional return_domain: return the domain id during iterating
     """
 
     def __init__(self, data, input_shape, scaling=None, type='tif3d', in_channels=1, orientations=(0,), batch_size=1,
                  dtype='uint8', norm_type='unit', range_split=None, range_dir=None, resolution=None,
-                 match_resolution_to=None):
+                 match_resolution_to=None, return_domain=False):
 
         if isinstance(data, str) or isinstance(data, np.ndarray):
             self.data = [load_data(data, data_type=type, dtype=dtype)]
@@ -296,6 +299,7 @@ class SlidingWindowDataset(data.Dataset):
         self.range_dir = range_dir
         self.resolution = resolution
         self.match_resolution_to = match_resolution_to
+        self.return_domain = return_domain
         self.warned = False
 
         # select a subset of slices of the data
