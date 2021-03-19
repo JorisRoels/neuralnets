@@ -304,7 +304,11 @@ class LabeledVolumeDataset(VolumeDataset):
                 self.labels[i] = F.interpolate(labels_it, scale_factor=scale_factor, mode='bilinear')[0, 0, ...].numpy()
 
         # select a subset of the labels if necessary
-        self.labels = [_select_labels(l, frac=self.partial_labels) for l in self.labels]
+        for i in range(len(self.labels)):
+            if isinstance(self.partial_labels, list) or isinstance(self.partial_labels, tuple):
+                self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels[i])
+            else:
+                self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels)
 
         # relabel classes of interest
         self.labels = [_map_cois(l, self.coi) for l in self.labels]
@@ -582,7 +586,11 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
                 self.labels[i] = F.interpolate(labels_it, scale_factor=scale_factor, mode='bilinear')[0, 0, ...].numpy()
 
         # select a subset of the labels if necessary
-        self.labels = [_select_labels(l, frac=self.partial_labels) for l in self.labels]
+        for i in range(len(self.labels)):
+            if isinstance(self.partial_labels, list) or isinstance(self.partial_labels, tuple):
+                self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels[i])
+            else:
+                self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels)
 
         # pad data so that the dimensions are a multiple of the inputs shapes
         self.labels = [pad2multiple(l, input_shape, value=255) for l in self.labels]
