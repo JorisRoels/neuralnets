@@ -222,7 +222,7 @@ class LabeledVolumeDataset(VolumeDataset):
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
-            if isinstance(range_split, list) and isinstance(range_dir, tuple):
+            if isinstance(range_dir, list) or isinstance(range_dir, tuple):
                 self.labels[i] = slice_subset(self.labels[i], range_split[i], range_dir[i])
             else:
                 self.labels[i] = slice_subset(self.labels[i], range_split, range_dir)
@@ -488,7 +488,7 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
-            if isinstance(range_split, list) and isinstance(range_dir, tuple):
+            if isinstance(range_dir, list) or isinstance(range_dir, tuple):
                 self.labels[i] = slice_subset(self.labels[i], range_split[i], range_dir[i])
             else:
                 self.labels[i] = slice_subset(self.labels[i], range_split, range_dir)

@@ -201,7 +201,7 @@ class VolumeDataset(data.Dataset):
 
         # select a subset of slices of the data
         for i in range(len(self.data)):
-            if isinstance(range_dir, list) or isinstance(range_dir, tuple):
+            if isinstance(range_split, list) or isinstance(range_split, tuple):
                 self.data[i] = slice_subset(self.data[i], range_split[i], range_dir[i])
             else:
                 self.data[i] = slice_subset(self.data[i], range_split, range_dir)
