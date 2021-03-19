@@ -8,7 +8,6 @@ from neuralnets.util.io import read_volume, mkdir
 
 from scipy.ndimage.morphology import binary_opening
 from torch.utils.tensorboard import SummaryWriter
-from itertools import product
 
 
 def sample_labeled_input(data, labels, input_shape, zyx=None, preloaded=True, type='pngseq', data_shape=None):
@@ -429,7 +428,8 @@ def log_hparams(gs, log_dir='logs'):
     metrics = gs.cv_results_['mean_test_score']
     for j, p_dict in enumerate(params):
         tb = SummaryWriter(log_dir=log_dir)
-        p_dict = {key: str(p_dict[key]) for key in list(p_dict.keys())}
+        p_dict = {key: (str(p_dict[key]) if (isinstance(p_dict[key], list) or isinstance(p_dict[key], tuple))
+                        else p_dict[key]) for key in list(p_dict.keys())}
         m_dict = {'mIoU': metrics[j]}
         tb.add_hparams(p_dict, m_dict)
         tb.close()
