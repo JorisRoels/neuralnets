@@ -545,7 +545,7 @@ class UNet(pl.LightningModule):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, loss_fn="ce", lr=1e-3):
+                 dropout_dec=0.0, loss_fn="ce", lr=1e-3, return_features=False):
         super().__init__()
 
         # parameters
@@ -567,6 +567,7 @@ class UNet(pl.LightningModule):
         self.activation = activation
         self.loss_fn = get_loss_function(loss_fn)
         self.lr = float(lr)
+        self.return_features = bool(return_features)
 
         self.train_batch_id = 0
         self.val_batch_id = 0
@@ -579,7 +580,10 @@ class UNet(pl.LightningModule):
         # expansive path
         decoder_outputs, outputs = self.decoder(final_output, encoder_outputs)
 
-        return outputs
+        if self.return_features:
+            return outputs, decoder_outputs[-1]
+        else:
+            return outputs
 
     def training_step(self, batch, batch_idx):
 
