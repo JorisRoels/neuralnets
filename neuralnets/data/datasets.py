@@ -138,8 +138,10 @@ def _map_cois(y, coi):
     """
     coi_ = list(coi)
     coi_.sort()
+    y_ = np.zeros_like(y)
+    y_[y == 255] = 255
     for i, c in enumerate(coi_):
-        y[y == c] = i
+        y_[y == c] = i
 
     return y
 
