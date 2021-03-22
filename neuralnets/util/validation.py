@@ -451,11 +451,11 @@ def _compute_validation_metrics(js_cum, ams_cum, classes_of_interest):
     return js, ams
 
 
-def _write_segmentation(segmentation, write_dir, classes_of_interest=(0, 1), index_inc=0):
+def write_segmentation(segmentation, write_dir, classes_of_interest=(0, 1), index_inc=0):
     mkdir(write_dir)
-    segmentation_volume = np.zeros(segmentation.shape[1:])
+    segmentation_volume = np.argmax(segmentation, axis=0)
     for i, c in enumerate(classes_of_interest):
-        segmentation_volume[segmentation[i] > 0.5] = c
+        segmentation_volume[segmentation_volume == i] = c
     write_volume(segmentation_volume, write_dir, index_inc=index_inc, type='pngseq')
 
 
@@ -584,7 +584,7 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
                                              train=train, track_progress=track_progress, device=device,
                                              orientations=orientations, normalization=normalization, bar=bar)
         if write_dir is not None:
-            _write_segmentation(z_block_segmented, write_dir, classes_of_interest=classes_of_interest, index_inc=start)
+            write_segmentation(z_block_segmented, write_dir, classes_of_interest=classes_of_interest, index_inc=start)
         if labels is not None:
             z_block_labels = read_volume(labels, type=type, start=start, stop=stop)
             js_cum, ams_cum = _cumulate_validation_metrics(z_block_segmented, z_block_labels, js_cum, ams_cum,
@@ -625,10 +625,10 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
             # z_block_prev is completely segmented, ready to write out and validate
             if write_dir is not None:
                 if i == zb:
-                    _write_segmentation(z_block_prev, write_dir, classes_of_interest=classes_of_interest,
+                    write_segmentation(z_block_prev, write_dir, classes_of_interest=classes_of_interest,
                                         index_inc=start)
                 else:
-                    _write_segmentation(z_block_prev[:, zo:], write_dir, classes_of_interest=classes_of_interest,
+                    write_segmentation(z_block_prev[:, zo:], write_dir, classes_of_interest=classes_of_interest,
                                         index_inc=start + j * zb)
             if labels is not None:
                 if i == zb:
@@ -644,7 +644,7 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
 
         # write out and validate last block
         if write_dir is not None:
-            _write_segmentation(z_block_segmented[:, zo:], write_dir, classes_of_interest=classes_of_interest,
+            write_segmentation(z_block_segmented[:, zo:], write_dir, classes_of_interest=classes_of_interest,
                                 index_inc=start + j * zb)
         if labels is not None:
             z_block_labels = read_volume(labels, type=type, start=start + j * zb, stop=start + z)
@@ -700,7 +700,7 @@ def segment_ram(data, net, input_shape, in_channels=1, batch_size=1, step_size=N
 
     # write out the segmentation if necessary
     if write_dir is not None:
-        _write_segmentation(segmentation, write_dir, classes_of_interest=classes_of_interest)
+        write_segmentation(segmentation, write_dir, classes_of_interest=classes_of_interest)
 
     # validate the segmentation if necessary
     if labels is not None:
