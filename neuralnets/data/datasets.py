@@ -143,7 +143,7 @@ def _map_cois(y, coi):
     for i, c in enumerate(coi_):
         y_[y == c] = i
 
-    return y
+    return y_
 
 
 class LabeledStandardDataset(StandardDataset):
