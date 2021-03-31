@@ -460,7 +460,9 @@ def normalize(x, type=None, factor=None, mu=None, sigma=None):
     :param sigma: normalization std (only if type is z)
     :return: the normalized numpy array
     """
-    if type == 'z':
+    if type is None:
+        return x
+    elif type == 'z':
         # apply z normalization
         if mu is None:
             mu = 0

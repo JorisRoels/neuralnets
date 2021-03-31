@@ -658,7 +658,8 @@ class UNet(pl.LightningModule):
 
     def on_epoch_start(self):
         set_seed(rnd.randint(100000))
-        self.train_batch_id = rnd.randint(self.trainer.num_training_batches)
+        if self.trainer.num_training_batches > 0:
+            self.train_batch_id = rnd.randint(self.trainer.num_training_batches)
         if len(self.trainer.num_val_batches) > 0:
             self.val_batch_id = rnd.randint(self.trainer.num_val_batches[0])
 
