@@ -157,6 +157,8 @@ def parse_params(params):
         params['log_refresh_rate'] = None if params['log_refresh_rate'] < 0 else int(params['log_refresh_rate'])
     if 'train_val_test_split' in keys:
         params['train_val_test_split'] = [float(item) for item in params['train_val_test_split'].split(',')]
+    if 'residual_connections' in keys:
+        params['residual_connections'] = bool(params['residual_connections'])
 
     return params
 
