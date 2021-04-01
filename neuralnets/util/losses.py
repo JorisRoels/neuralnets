@@ -41,7 +41,7 @@ class CrossEntropyLoss(nn.Module):
             loss = loss.mean()
         else:
             # weighting and reduce
-            loss = (loss * w).sum()
+            loss = (loss * w).mean()
 
         return loss
 
@@ -113,7 +113,7 @@ class FocalLoss(nn.Module):
             loss = loss.mean()
         else:
             # weighting and reduce
-            loss = (loss * w.view(-1)).sum()
+            loss = (loss * w.view(-1)).mean()
 
         return loss
 
