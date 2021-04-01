@@ -588,13 +588,18 @@ class UNet(pl.LightningModule):
     def training_step(self, batch, batch_idx):
 
         # transfer to suitable device and get labels
-        x, y = batch
+        if self.train_dataloader.dataloader.dataset.weight_balancing is not None:
+            x, y, w = batch
+            w = w[:, 0, ...]
+        else:
+            x, y = batch
+            w = None
 
         # forward prop
         y_pred = self(x)
 
         # compute loss
-        loss = self.loss_fn(y_pred, y[:, 0, ...])
+        loss = self.loss_fn(y_pred, y[:, 0, ...], w=w)
         y_pred = torch.softmax(y_pred, dim=1)
 
         # compute iou
@@ -611,13 +616,18 @@ class UNet(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
 
         # transfer to suitable device and get labels
-        x, y = batch
+        if self.val_dataloader.dataloader.dataset.weight_balancing is not None:
+            x, y, w = batch
+            w = w[:, 0, ...]
+        else:
+            x, y = batch
+            w = None
 
         # forward prop
         y_pred = self(x)
 
         # compute loss
-        loss = self.loss_fn(y_pred, y[:, 0, ...])
+        loss = self.loss_fn(y_pred, y[:, 0, ...], w=w)
         y_pred = torch.softmax(y_pred, dim=1)
 
         # compute iou
@@ -634,13 +644,18 @@ class UNet(pl.LightningModule):
     def test_step(self, batch, batch_idx):
 
         # transfer to suitable device and get labels
-        x, y = batch
+        if self.val_dataloader.dataloader.dataset.weight_balancing is not None:
+            x, y, w = batch
+            w = w[:, 0, ...]
+        else:
+            x, y = batch
+            w = None
 
         # forward prop
         y_pred = self(x)
 
         # compute loss
-        loss = self.loss_fn(y_pred, y[:, 0, ...])
+        loss = self.loss_fn(y_pred, y[:, 0, ...], w=w)
         y_pred = torch.softmax(y_pred, dim=1)
 
         # compute iou

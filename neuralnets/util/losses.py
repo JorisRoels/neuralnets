@@ -30,12 +30,18 @@ class CrossEntropyLoss(nn.Module):
         w = None
         if weight is not None:
             w = tensor_to_device(torch.Tensor(weight), device=device)
-        self.ce = nn.CrossEntropyLoss(weight=w, ignore_index=255)
+        self.ce = nn.CrossEntropyLoss(weight=w, ignore_index=255, reduce='none')
 
-    def forward(self, logits, target):
+    def forward(self, logits, target, w=None):
 
-        # compute loss unreduced and reshape to vector
-        loss = self.ce(logits, target).view(-1)
+        # compute loss
+        loss = self.ce(logits, target)
+        if w is None:
+            # reduce mean
+            loss = loss.mean()
+        else:
+            # weighting and reduce
+            loss = (loss * w).sum()
 
         return loss
 
@@ -76,7 +82,7 @@ class FocalLoss(nn.Module):
             self.alpha = torch.Tensor(self.alpha / np.sum(self.alpha))
         self.gamma = gamma
 
-    def forward(self, logits, target, mask=None):
+    def forward(self, logits, target, w=None):
 
         # apply log softmax
         log_p = F.log_softmax(logits, dim=1)
@@ -102,10 +108,12 @@ class FocalLoss(nn.Module):
         loss = F.nll_loss((1 - p) ** self.gamma * log_p, target, reduction='none', weight=cw)
 
         # size averaging if necessary
-        if mask is not None:
-            loss = loss[mask.view(-1)].mean()
-        else:
+        if w is None:
+            # reduce mean
             loss = loss.mean()
+        else:
+            # weighting and reduce
+            loss = (loss * w.view(-1)).sum()
 
         return loss
 
@@ -125,11 +133,11 @@ class DiceLoss(nn.Module):
     :return: dice loss
     """
 
-    def forward(self, logits, target, mask=None):
+    def forward(self, logits, target, w=None):
 
         # precompute for efficiency
-        if mask is not None:
-            mask = mask.view(-1)
+        if w is not None:
+            w = w.view(-1)
 
         # apply softmax and compute dice loss for each class
         probs = F.softmax(logits, dim=1)
@@ -142,14 +150,15 @@ class DiceLoss(nn.Module):
             p = p.contiguous().view(-1)
             t = t.contiguous().view(-1)
 
-            # mask if necessary
-            if mask is not None:
-                p = p[mask]
-                t = t[mask]
-
             # dice loss
-            numerator = 2 * torch.sum(p * t)
-            denominator = torch.sum(p + t)
+            n = p * t
+            d = p * p + t * t
+            if w is not None:
+                numerator = 2 * torch.sum(w * n)
+                denominator = torch.sum(w * d)
+            else:
+                numerator = 2 * torch.sum(n)
+                denominator = torch.sum(d)
             dice = dice + (1 - ((numerator + 1) / (denominator + 1)))
 
         # compute average
@@ -177,11 +186,11 @@ class TverskyLoss(nn.Module):
         self.beta = beta
         self.c = c
 
-    def forward(self, logits, target, mask=None):
+    def forward(self, logits, target, w=None):
 
         # precompute for efficiency
-        if mask is not None:
-            mask = mask.view(-1)
+        if w is not None:
+            w = w.view(-1)
 
         # apply softmax and compute dice loss for each class
         probs = F.softmax(logits, dim=1)
@@ -194,14 +203,15 @@ class TverskyLoss(nn.Module):
             p = p.contiguous().view(-1)
             t = t.contiguous().view(-1)
 
-            # mask if necessary
-            if mask is not None:
-                p = p[mask]
-                t = t[mask]
-
-            # dice loss
-            numerator = torch.sum(p * t)
-            denominator = numerator + self.beta * torch.sum((1 - t) * p) + (1 - self.beta) * torch.sum((1 - p) * t)
+            # tversky loss
+            n = p * t
+            d = self.beta * (1 - t) * p + (1 - self.beta) * (1 - p) * t
+            if w is not None:
+                numerator = torch.sum(w * n)
+                denominator = torch.sum(w * (n + d))
+            else:
+                numerator = torch.sum(n)
+                denominator = torch.sum(n + d)
             tversky = tversky + (1 - ((numerator + 1) / (denominator + 1)))
 
         # compute average

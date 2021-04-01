@@ -1,9 +1,11 @@
 
 import warnings
 
-from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, normalize
+from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, sample_synchronized, normalize
 from neuralnets.util.augmentation import split_segmentation_transforms
 from neuralnets.data.base import *
+
+from skimage.measure import regionprops, label
 
 
 MAX_SAMPLING_ATTEMPTS = 20
@@ -146,6 +148,42 @@ def _map_cois(y, coi):
     return y_
 
 
+def _label_stats(labels, coi):
+    stats = []
+    for j, labels_j in enumerate(labels):
+        tmp = np.zeros((len(coi)))
+        for i, c in enumerate(coi):
+            tmp[i] = np.sum(labels_j == i)
+        tmp = tmp / np.sum(tmp)
+        stats.append([])
+        for i, c in enumerate(coi):
+            stats[j].append((c, tmp[i]))
+        stats[j].append((255, np.sum(labels_j == 255) / labels_j.size))
+    return stats
+
+
+def _balance_weights(labels, type=None, label_stats=None):
+
+    if type == 'inverse_class_balancing':
+        weights = np.ones_like(labels, dtype=float)
+        for i, ls in enumerate(label_stats):
+            c, f = ls
+            w_c = 1 / f
+            weights[labels == i] = w_c
+    elif type == 'inverse_size_balancing':
+        weights = np.ones_like(labels, dtype=float)
+        for i, ls in enumerate(label_stats):
+            l_cc = label(labels == i)
+            props = regionprops(l_cc)
+            for k, p in enumerate(props):
+                sz = p.area
+                weights[l_cc == k] = np.sum(labels == i) / sz / len(props)
+    else:
+        weights = np.ones_like(labels, dtype=float)
+
+    return weights
+
+
 class LabeledStandardDataset(StandardDataset):
     """
     Strongly labeled dataset of N 2D images and pixel-wise labels
@@ -259,12 +297,16 @@ class LabeledVolumeDataset(VolumeDataset):
             - single: the dataset will generate a random sample from a randomly selected dataset and return that
     :param optional return_domain: return the domain id during iterating
     :param optional partial_labels: fraction of the labels that should be selected (default: 1)
+    :param optional weight_balancing: balance classes, we currently support
+            - inverse_class_balancing: class frequencies are balanced
+            - inverse_size_balancing: object size is balanced
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
                  norm_type='unit', transform=None, range_split=None, range_dir=None, resolution=None,
-                 match_resolution_to=None, sampling_type='joint', return_domain=False, partial_labels=1):
+                 match_resolution_to=None, sampling_type='joint', return_domain=False, partial_labels=1,
+                 weight_balancing=None):
         super().__init__(data, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
                          in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
                          norm_type=norm_type, range_split=range_split, range_dir=range_dir, resolution=resolution,
@@ -284,6 +326,7 @@ class LabeledVolumeDataset(VolumeDataset):
         if transform is not None:
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
         self.partial_labels = partial_labels
+        self.weight_balancing = weight_balancing
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
@@ -315,14 +358,23 @@ class LabeledVolumeDataset(VolumeDataset):
         # relabel classes of interest
         self.labels = [_map_cois(l, self.coi) for l in self.labels]
 
-    def _sample(self, data_index):
+        # print label stats
+        self.label_stats = _label_stats(self.labels, self.coi)
+
+        # setup weight balancing if necessary
+        if weight_balancing is not None:
+            print_frm('Precomputing balancing weights...')
+            self.weights = [_balance_weights(l, type=self.weight_balancing, label_stats=self.label_stats[i][:-1])
+                            for i, l in enumerate(self.labels)]
+
+    def _sample_xy(self, data_index):
 
         # get shape of sample
         input_shape = _validate_shape(self.input_shape, self.data[data_index].shape, in_channels=self.in_channels,
                                       orientation=self.orientation)
 
         # get random sample
-        x, y = sample_labeled_input(self.data[data_index], self.labels[data_index], input_shape)
+        x, y = sample_synchronized([self.data[data_index], self.labels[data_index]], input_shape)
         x = normalize(x, type=self.norm_type)
         y = y.astype(float)
 
@@ -352,6 +404,50 @@ class LabeledVolumeDataset(VolumeDataset):
 
         return x, y
 
+    def _sample_xyw(self, data_index):
+
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data[data_index].shape, in_channels=self.in_channels,
+                                      orientation=self.orientation)
+
+        # get random sample
+        x, y, w = sample_synchronized([self.data[data_index], self.labels[data_index], self.weights[data_index]],
+                                      input_shape)
+        x = normalize(x, type=self.norm_type)
+        y = y.astype(float)
+        w = w.astype(float)
+
+        # reorient sample
+        x = _orient(x, orientation=self.orientation)
+        y = _orient(y, orientation=self.orientation)
+        w = _orient(w, orientation=self.orientation)
+
+        # add channel axis if the data is 3D
+        if self.input_shape[0] > 1:
+            x, y, w = x[np.newaxis, ...], y[np.newaxis, ...], w[np.newaxis, ...] = w[np.newaxis, ...]
+
+        # select middle slice if multiple consecutive slices
+        if self.in_channels > 1:
+            c = self.in_channels // 2
+            y = y[c:c + 1]
+            w = w[c:c + 1]
+
+        # augment sample
+        if self.transform is not None:
+            data = self.shared_transform(np.concatenate((x, y, w), axis=0))
+            p = x.shape[0]
+            q = y.shape[0]
+            x = self.x_transform(data[:p])
+            y = self.y_transform(data[p:p+q])
+            w = data[p+q:]
+
+        # transform to tensors
+        x = torch.from_numpy(x).float()
+        y = torch.from_numpy(y).long()
+        w = torch.from_numpy(w).float()
+
+        return x, y, w
+
     def __getitem__(self, i, attempt=0):
 
         # reorient when we start a new batch
@@ -364,12 +460,18 @@ class LabeledVolumeDataset(VolumeDataset):
             r = np.random.randint(len(self.data))
 
             # select a sample from dataset r
-            x, y = self._sample(r)
+            if self.weight_balancing is not None:
+                x, y, w = self._sample_xyw(r)
+            else:
+                x, y = self._sample_xy(r)
 
             # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             if len(np.intersect1d(torch.unique(y).numpy(), self.coi)) == 0 and not self.warned:
                 if attempt < MAX_SAMPLING_ATTEMPTS:
-                    x, y = self.__getitem__(i, attempt=attempt + 1)
+                    if self.weight_balancing is not None:
+                        x, y, w = self.__getitem__(i, attempt=attempt + 1)
+                    else:
+                        x, y = self.__getitem__(i, attempt=attempt + 1)
                 else:
                     warnings.warn("No labeled pixels found after %d sampling attempts! " % attempt)
                     self.warned = True
@@ -378,37 +480,57 @@ class LabeledVolumeDataset(VolumeDataset):
 
             xs = []
             ys = []
+            if self.weight_balancing is not None:
+                ws = []
 
             for r in range(len(self.data)):
 
                 # select a sample from dataset r
-                x, y = self._sample(r)
+                if self.weight_balancing is not None:
+                    x, y, w = self._sample_xyw(r)
+                else:
+                    x, y = self._sample_xy(r)
 
                 xs.append(x)
                 ys.append(y)
+                if self.weight_balancing is not None:
+                    ws.append(w)
 
             if len(self.data) == 1:
                 x = xs[0]
                 y = ys[0]
+                if self.weight_balancing is not None:
+                    w = ws[0]
             else:
                 x = xs
                 y = ys
+                if self.weight_balancing is not None:
+                    w = ws
 
             r = np.arange(len(self.data), dtype=int)
 
             # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
             if np.sum([len(np.intersect1d(torch.unique(y_).numpy(), self.coi)) for y_ in ys]) == 0 and not self.warned:
                 if attempt < MAX_SAMPLING_ATTEMPTS:
-                    x, y = self.__getitem__(i, attempt=attempt + 1)
+                    if self.weight_balancing is not None:
+                        x, y, w = self.__getitem__(i, attempt=attempt + 1)
+                    else:
+                        x, y = self.__getitem__(i, attempt=attempt + 1)
                 else:
                     warnings.warn("No labeled pixels found after %d sampling attempts! " % attempt)
                     self.warned = True
 
         # return sample
         if self.return_domain:
-            return r, x, y
+            if self.weight_balancing is not None:
+                return r, x, y, w
+            else:
+                return r, x, y
         else:
-            return x, y
+            if self.weight_balancing is not None:
+                return x, y, w
+            else:
+                return x, y
 
 
 class UnlabeledVolumeDataset(VolumeDataset):
@@ -542,12 +664,15 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
     :param optional match_resolution_to: match the resolution of all data to a specific dataset
     :param optional return_domain: return the domain id during iterating
     :param optional partial_labels: fraction of the labels that should be selected (default: 1)
+    :param optional weight_balancing: balance classes, we currently support
+            - inverse_class_balancing: class frequencies are balanced
+            - inverse_size_balancing: object size is balanced
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, type='tif3d', in_channels=1, orientations=(0,),
                  coi=(0, 1), batch_size=1, data_dtype='uint8', label_dtype='uint8', norm_type='unit', transform=None,
                  range_split=None, range_dir=None, resolution=None, match_resolution_to=None, return_domain=False,
-                 partial_labels=1):
+                 partial_labels=1, weight_balancing=None):
         super().__init__(data, input_shape, scaling=scaling, type=type, in_channels=in_channels,
                          orientations=orientations, batch_size=batch_size, dtype=data_dtype, norm_type=norm_type,
                          range_split=range_split, range_dir=range_dir, resolution=resolution,
@@ -566,6 +691,7 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
         if transform is not None:
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
         self.partial_labels = partial_labels
+        self.weight_balancing = weight_balancing
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
@@ -603,7 +729,16 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
         # relabel classes of interest
         self.labels = [_map_cois(l, self.coi) for l in self.labels]
 
-    def __getitem__(self, i):
+        # print label stats
+        self.label_stats = _label_stats(self.labels, self.coi)
+
+        # setup weight balancing if necessary
+        if weight_balancing is not None:
+            print_frm('Precomputing balancing weights...')
+            self.weights = [_balance_weights(l, type=self.weight_balancing, label_stats=self.label_stats[i][:-1])
+                            for i, l in enumerate(self.labels)]
+
+    def _sample_xyw(self, i):
 
         # find dataset index
         r = 0
@@ -624,7 +759,64 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
         input_shape = _validate_shape(self.input_shape, self.data[r].shape, in_channels=self.in_channels)
 
         # get sample
-        x, y = sample_labeled_input(self.data[r], self.labels[r], input_shape, zyx=(pz, py, px))
+        x, y, w = sample_synchronized([self.data[r], self.labels[r], self.weights[r]], input_shape, zyx=(pz, py, px))
+        x = normalize(x, type=self.norm_type)
+        y = y.astype(float)
+        w = w.astype(float)
+
+        # add channel axis if the data is 3D
+        if self.input_shape[0] > 1:
+            x, y, w = x[np.newaxis, ...], y[np.newaxis, ...], w[np.newaxis, ...]
+
+        # select middle slice if multiple consecutive slices
+        if self.in_channels > 1:
+            c = self.in_channels // 2
+            y = y[c:c + 1]
+            w = w[c:c + 1]
+
+        # augment sample
+        if self.transform is not None:
+            data = self.shared_transform(np.concatenate((x, y, w), axis=0))
+            p = x.shape[0]
+            q = y.shape[0]
+            x = self.x_transform(data[:p])
+            y = self.y_transform(data[p:p+q])
+            w = w[p+q:]
+
+        # transform to tensors
+        x = torch.from_numpy(x).float()
+        y = torch.from_numpy(y).long()
+        w = torch.from_numpy(w).float()
+
+        # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
+        if len(np.intersect1d(torch.unique(y).numpy(), np.arange(len(self.coi)))) == 0 and not self.warned:
+            warnings.warn("No labeled pixels found! ")
+            self.warned = True
+
+        return r, x, y, w
+
+    def _sample_xy(self, i):
+
+        # find dataset index
+        r = 0
+        szs = self.n_samples_dim.prod(axis=1)
+        while szs[:r + 1].sum() <= i:
+            r += 1
+
+        # get spatial location
+        j = i - szs[:r].sum()
+        iz = j // (self.n_samples_dim[r, 1] * self.n_samples_dim[r, 2])
+        iy = (j - iz * self.n_samples_dim[r, 1] * self.n_samples_dim[r, 2]) // self.n_samples_dim[r, 2]
+        ix = j - iz * self.n_samples_dim[r, 1] * self.n_samples_dim[r, 2] - iy * self.n_samples_dim[r, 2]
+        pz = self.input_shape[0] * iz
+        py = self.input_shape[1] * iy
+        px = self.input_shape[2] * ix
+
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data[r].shape, in_channels=self.in_channels)
+
+        # get sample
+        x, y = sample_synchronized([self.data[r], self.labels[r]], input_shape, zyx=(pz, py, px))
         x = normalize(x, type=self.norm_type)
         y = y.astype(float)
 
@@ -653,8 +845,19 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
             warnings.warn("No labeled pixels found! ")
             self.warned = True
 
-        # return sample
-        if self.return_domain:
-            return r, x, y
+        return r, x, y
+
+    def __getitem__(self, i):
+
+        if self.weight_balancing is not None:
+            r, x, y, w = self._sample_xyw(i)
+            if self.return_domain:
+                return r, x, y, w
+            else:
+                return x, y, w
         else:
-            return x, y
+            r, x, y = self._sample_xy(i)
+            if self.return_domain:
+                return r, x, y
+            else:
+                return x, y

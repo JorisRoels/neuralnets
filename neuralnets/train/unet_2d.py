@@ -51,7 +51,7 @@ if __name__ == '__main__':
     train = LabeledVolumeDataset(params['data'], params['labels'], input_shape=input_shape,
                                  in_channels=params['in_channels'], type=params['type'],
                                  batch_size=params['train_batch_size'], transform=transform, range_split=(0, split[0]),
-                                 range_dir=params['split_orientation'], len_epoch=200)
+                                 range_dir=params['split_orientation'])
     val = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape,
                                       in_channels=params['in_channels'], type=params['type'],
                                       batch_size=params['test_batch_size'], range_split=(split[0], split[1]),
@@ -66,6 +66,13 @@ if __name__ == '__main__':
                             pin_memory=True)
     test_loader = DataLoader(test, batch_size=params['test_batch_size'], num_workers=params['num_workers'],
                              pin_memory=True)
+    print_frm('Label distribution: ')
+    for i in range(len(params['coi'])):
+        print_frm('    - Class %d: %.3f (train) - %.3f (val) - %.3f (test)' %
+                  (train.label_stats[0][i][0], train.label_stats[0][i][1],
+                   val.label_stats[0][i][1], test.label_stats[0][i][1]))
+    print_frm('    - Unlabeled pixels: %.3f (train) - %.3f (val) - %.3f (test)' %
+              (train.label_stats[0][-1][1], val.label_stats[0][-1][1], test.label_stats[0][-1][1]))
 
     """
         Build the network
@@ -80,11 +87,10 @@ if __name__ == '__main__':
     """
     print_frm('Starting training')
     print_frm('Training with loss: %s' % params['loss'])
-    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
     checkpoint_callback = ModelCheckpoint(save_top_k=1, verbose=True, monitor='val/mIoU', mode='max')
     trainer = pl.Trainer(max_epochs=params['epochs'], gpus=params['gpus'], accelerator=params['accelerator'],
                          default_root_dir=params['log_dir'], flush_logs_every_n_steps=params['log_freq'],
-                         log_every_n_steps=params['log_freq'], callbacks=[lr_monitor, checkpoint_callback],
+                         log_every_n_steps=params['log_freq'], callbacks=[checkpoint_callback],
                          progress_bar_refresh_rate=params['log_refresh_rate'])
     trainer.fit(net, train_loader, val_loader)
 

@@ -60,6 +60,13 @@ if __name__ == '__main__':
                             pin_memory=True)
     test_loader = DataLoader(test, batch_size=params['test_batch_size'], num_workers=params['num_workers'],
                              pin_memory=True)
+    print_frm('Label distribution: ')
+    for i in range(len(params['coi'])):
+        print_frm('    - Class %d: %.3f (train) - %.3f (val) - %.3f (test)' %
+                  (train.label_stats[0][i][0], train.label_stats[0][i][1],
+                   val.label_stats[0][i][1], test.label_stats[0][i][1]))
+    print_frm('    - Unlabeled pixels: %.3f (train) - %.3f (val) - %.3f (test)' %
+              (train.label_stats[0][-1][1], val.label_stats[0][-1][1], test.label_stats[0][-1][1]))
 
     """
         Build the network
