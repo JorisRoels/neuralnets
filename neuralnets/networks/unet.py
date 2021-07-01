@@ -1,4 +1,4 @@
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import iou
 import os
@@ -545,7 +545,8 @@ class UNet(pl.LightningModule):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, loss_fn="ce", lr=1e-3, return_features=False):
+                 dropout_dec=0.0, loss_fn="ce", lr=1e-3, scheduler=None, step_size=1, gamma=0.1, return_features=False,
+                 save_checkpoints=True):
         super().__init__()
 
         # parameters
@@ -567,7 +568,11 @@ class UNet(pl.LightningModule):
         self.activation = activation
         self.loss_fn = get_loss_function(loss_fn)
         self.lr = float(lr)
+        self.scheduler_name = scheduler
+        self.step_size = int(step_size)
+        self.gamma = float(gamma)
         self.return_features = bool(return_features)
+        self.save_checkpoints = bool(save_checkpoints)
 
         self.train_batch_id = 0
         self.val_batch_id = 0
@@ -644,7 +649,7 @@ class UNet(pl.LightningModule):
     def test_step(self, batch, batch_idx):
 
         # transfer to suitable device and get labels
-        if self.val_dataloader.dataloader.dataset.weight_balancing is not None:
+        if self.test_dataloader.dataloader.dataset.weight_balancing is not None:
             x, y, w = batch
             w = w[:, 0, ...]
         else:
@@ -667,9 +672,14 @@ class UNet(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = ReduceLROnPlateau(optimizer, 'max')
-        return {"optimizer": optimizer}
-        # return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": 'val/mIoU'}
+        optimizer_dict = {"optimizer": optimizer}
+        if self.scheduler_name == 'reduce_lr_on_plateau':
+            scheduler = ReduceLROnPlateau(optimizer, 'max', patience=self.step_size, factor=self.gamma)
+            optimizer_dict.update({"lr_scheduler": scheduler, "monitor": 'val/mIoU'})
+        elif self.scheduler_name == 'step_lr':
+            scheduler = StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
+            optimizer_dict.update({"lr_scheduler": scheduler})
+        return optimizer_dict
 
     def on_epoch_start(self):
         set_seed(rnd.randint(100000))
@@ -679,8 +689,9 @@ class UNet(pl.LightningModule):
             self.val_batch_id = rnd.randint(self.trainer.num_val_batches[0])
 
     def on_epoch_end(self):
-        torch.save(self.state_dict(), os.path.join(self.logger.log_dir, 'checkpoints', 'epoch=%d-step=%d.ckpt' %
-                                                   (self.current_epoch, self.global_step)))
+        if self.save_checkpoints:
+            torch.save(self.state_dict(), os.path.join(self.logger.log_dir, 'checkpoints', 'epoch=%d-step=%d.ckpt' %
+                                                       (self.current_epoch, self.global_step)))
 
     def segment(self, data, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
                 device=0, orientations=(0,), normalization='unit'):
@@ -740,11 +751,13 @@ class UNet2D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, loss_fn='ce', lr=1e-3, return_features=False):
+                 dropout_dec=0.0, loss_fn='ce', lr=1e-3, scheduler=None, step_size=1, gamma=0.1, return_features=False,
+                 save_checkpoints=True):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
-                         loss_fn=loss_fn, lr=lr, return_features=return_features)
+                         loss_fn=loss_fn, lr=lr, scheduler=scheduler, step_size=step_size, gamma=gamma,
+                         return_features=return_features, save_checkpoints=save_checkpoints)
 
         # contractive path
         self.encoder = UNetEncoder2D(self.in_channels, feature_maps=self.feature_maps, levels=self.levels,
@@ -760,11 +773,13 @@ class UNet3D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, loss_fn='ce', lr=1e-3, return_features=False):
+                 dropout_dec=0.0, loss_fn='ce', lr=1e-3, scheduler=None, step_size=1, gamma=0.1, return_features=False,
+                 save_checkpoints=True):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
-                         loss_fn=loss_fn, lr=lr, return_features=return_features)
+                         loss_fn=loss_fn, lr=lr, scheduler=scheduler, step_size=step_size, gamma=gamma,
+                         return_features=return_features, save_checkpoints=save_checkpoints)
 
         # contractive path
         self.encoder = UNetEncoder3D(self.in_channels, feature_maps=self.feature_maps, levels=self.levels,
@@ -780,11 +795,13 @@ class DenseUNet2D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn='ce', lr=1e-3, return_features=False):
+                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn='ce', lr=1e-3, scheduler=None, step_size=1,
+                 gamma=0.1, return_features=False,  save_checkpoints=True):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
-                         loss_fn=loss_fn, lr=lr, return_features=return_features)
+                         loss_fn=loss_fn, lr=lr, scheduler=scheduler, step_size=step_size, gamma=gamma,
+                         return_features=return_features, save_checkpoints=save_checkpoints)
 
         # parameters
         self.num_layers = int(num_layers)
@@ -807,11 +824,13 @@ class DenseUNet3D(UNet):
 
     def __init__(self, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1), feature_maps=64, levels=4,
                  skip_connections=True, residual_connections=False, norm='instance', activation='relu', dropout_enc=0.0,
-                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn='ce', lr=1e-3, return_features=False):
+                 dropout_dec=0.0, num_layers=4, k=16, bn_size=2, loss_fn='ce', lr=1e-3, scheduler=None, step_size=1,
+                 gamma=0.1, return_features=False,  save_checkpoints=True):
         super().__init__(input_shape=input_shape, in_channels=in_channels, coi=coi, feature_maps=feature_maps,
                          levels=levels, skip_connections=skip_connections, residual_connections=residual_connections,
                          norm=norm, activation=activation, dropout_enc=dropout_enc, dropout_dec=dropout_dec,
-                         loss_fn=loss_fn, lr=lr, return_features=return_features)
+                         loss_fn=loss_fn, lr=lr, scheduler=scheduler, step_size=step_size, gamma=gamma,
+                         return_features=return_features, save_checkpoints=save_checkpoints)
 
         # parameters
         self.num_layers = int(num_layers)
