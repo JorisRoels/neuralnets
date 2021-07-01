@@ -27,7 +27,7 @@ if __name__ == '__main__':
     """
     print_frm('Parsing arguments')
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", help="Path to the configuration file", type=str, default='dense_unet_2d.yaml')
+    parser.add_argument("--config", "-c", help="Path to the configuration file", type=str, default='neuralnets/train/dense_unet_2d.yaml')
     args = parser.parse_args()
     with open(args.config) as file:
         params = parse_params(yaml.load(file, Loader=yaml.FullLoader))
