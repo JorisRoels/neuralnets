@@ -1,7 +1,7 @@
 
 import warnings
 
-from neuralnets.util.tools import sample_unlabeled_input, sample_labeled_input, sample_synchronized, normalize
+from neuralnets.util.tools import sample_unlabeled_input, sample_synchronized, normalize
 from neuralnets.util.augmentation import split_segmentation_transforms
 from neuralnets.data.base import *
 
