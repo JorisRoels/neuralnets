@@ -405,7 +405,7 @@ def get_loss_function(s):
     elif name == "fl" or name == "focal":
         return FocalLoss(**params)
     elif name == "dl" or name == "dice":
-        return DiceLoss(**params)
+        return DiceLoss()
     elif name == "tl" or name == "tversky":
         return TverskyLoss(**params)
     elif name == "l1":
