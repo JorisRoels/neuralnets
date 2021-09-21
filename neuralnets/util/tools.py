@@ -36,7 +36,10 @@ def sample_synchronized(data, input_shape, zyx=None, type='pngseq', data_shape=N
 
         # sample data
         for d in data:
-            samples.append(d[z:z + input_shape[0], y:y + input_shape[1], x:x + input_shape[2]].copy())
+            if d is not None:
+                samples.append(d[z:z + input_shape[0], y:y + input_shape[1], x:x + input_shape[2]].copy())
+            else:
+                samples.append(None)
     else:  # if not preloaded, we have to additionally load it in RAM
         # generate random position
         if zyx is None:
@@ -47,8 +50,11 @@ def sample_synchronized(data, input_shape, zyx=None, type='pngseq', data_shape=N
             z, y, x = zyx
 
         for d in data:
-            sample = read_volume(d, type=type, start=z, stop=z + input_shape[0])
-            samples.append(sample[:, y:y + input_shape[1], x:x + input_shape[2]].copy())
+            if d is not None:
+                sample = read_volume(d, type=type, start=z, stop=z + input_shape[0])
+                samples.append(sample[:, y:y + input_shape[1], x:x + input_shape[2]].copy())
+            else:
+                samples.append(None)
 
     return samples
 

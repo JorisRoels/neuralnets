@@ -1,6 +1,8 @@
 
 import warnings
 
+import numpy as np
+
 from neuralnets.util.tools import sample_unlabeled_input, sample_synchronized, normalize
 from neuralnets.util.augmentation import split_segmentation_transforms
 from neuralnets.data.base import *
@@ -19,16 +21,16 @@ def _orient(data, orientation=0):
           (Z, Y, X) -> (X, Y, Z) for orientation=2
     Note that applying this function twice corresponds to the identity transform
 
-    :param data: assumed to be of shape (Z, Y, X)
+    :param data: assumed to be of shape (Z, Y, X), nothing will be done for None types
     :param orientation: 0, 1 or 2 (respectively for Z, Y or X axis)
     :return: reoriented data sample
     """
-    if orientation == 1:
-        return np.transpose(data, axes=(1, 0, 2))
-    elif orientation == 2:
-        return np.transpose(data, axes=(2, 1, 0))
-    else:
-        return data
+    if data is not None:
+        if orientation == 1:
+            return np.transpose(data, axes=(1, 0, 2))
+        elif orientation == 2:
+            return np.transpose(data, axes=(2, 1, 0))
+    return data
 
 
 def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, levels=4):
@@ -151,14 +153,17 @@ def _map_cois(y, coi):
 def _label_stats(labels, coi):
     stats = []
     for j, labels_j in enumerate(labels):
-        tmp = np.zeros((len(coi)))
-        for i, c in enumerate(coi):
-            tmp[i] = np.sum(labels_j == i)
-        tmp = tmp / np.sum(tmp)
-        stats.append([])
-        for i, c in enumerate(coi):
-            stats[j].append((c, tmp[i]))
-        stats[j].append((255, np.sum(labels_j == 255) / labels_j.size))
+        if labels_j is not None:
+            tmp = np.zeros((len(coi)))
+            for i, c in enumerate(coi):
+                tmp[i] = np.sum(labels_j == i)
+            tmp = tmp / np.sum(tmp)
+            stats.append([])
+            for i, c in enumerate(coi):
+                stats[j].append((c, tmp[i]))
+            stats[j].append((255, np.sum(labels_j == 255) / labels_j.size))
+        else:
+            stats.append(None)
     return stats
 
 
@@ -275,6 +280,7 @@ class LabeledVolumeDataset(VolumeDataset):
             - preloaded 3D volume (numpy array)
             - list of paths to multiple datasets (list of strings)
             - list of preloaded 3D volumes (list of numpy arrays)
+                  if None is provided within a list, it is assumed that these labels are not available
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: 3-tuple used for rescaling the data, or a list of 3-tuples in case of multiple datasets
     :param optional len_epoch: number of iterations for one epoch
@@ -317,8 +323,17 @@ class LabeledVolumeDataset(VolumeDataset):
             self.labels = [load_data(labels, data_type=type, dtype=label_dtype)]
         elif isinstance(labels, list) or isinstance(labels, tuple):  # list of data
             self.labels = []
+            all_none = True
             for labels_i in labels:
-                self.labels.append(load_data(labels_i, data_type=type, dtype=label_dtype))
+                if labels_i is None:
+                    self.labels.append(None)
+                else:
+                    self.labels.append(load_data(labels_i, data_type=type, dtype=label_dtype))
+                    all_none = False
+            if all_none:
+                raise ValueError('None was provided for all datasets, please use an UnlabeledVolumeDataset')
+        elif labels is None:
+            raise ValueError('None was provided for all datasets, please use an UnlabeledVolumeDataset')
         else:
             raise ValueError('LabeledVolumeDataset requires labels in str, np.ndarray or list format')
         self.coi = coi
@@ -330,14 +345,16 @@ class LabeledVolumeDataset(VolumeDataset):
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
-            if isinstance(range_dir, list) or isinstance(range_dir, tuple):
-                self.labels[i] = slice_subset(self.labels[i], range_split[i], range_dir[i])
-            else:
-                self.labels[i] = slice_subset(self.labels[i], range_split, range_dir)
+            if self.labels[i] is not None:
+                if isinstance(range_dir, list) or isinstance(range_dir, tuple):
+                    self.labels[i] = slice_subset(self.labels[i], range_split[i], range_dir[i])
+                else:
+                    self.labels[i] = slice_subset(self.labels[i], range_split, range_dir)
 
         # rescale the dataset if necessary
         for i in range(len(self.labels)):
-            if (self.resolution is not None and self.match_resolution_to is not None) or self.scaling is not None:
+            if (self.resolution is not None and self.match_resolution_to is not None) or self.scaling is not None \
+                    and self.labels[i] is not None and self.labels[self.match_resolution_to] is not None:
                 if self.resolution is not None and self.match_resolution_to is not None:
                     scale_factor = np.divide(self.labels[self.match_resolution_to].shape, self.labels[i].shape)
                 else:
@@ -350,13 +367,14 @@ class LabeledVolumeDataset(VolumeDataset):
 
         # select a subset of the labels if necessary
         for i in range(len(self.labels)):
-            if isinstance(self.partial_labels, list) or isinstance(self.partial_labels, tuple):
-                self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels[i])
-            else:
-                self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels)
+            if self.labels[i] is not None:
+                if isinstance(self.partial_labels, list) or isinstance(self.partial_labels, tuple):
+                    self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels[i])
+                else:
+                    self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels)
 
         # relabel classes of interest
-        self.labels = [_map_cois(l, self.coi) for l in self.labels]
+        self.labels = [_map_cois(l, self.coi) if l is not None else None for l in self.labels]
 
         # print label stats
         self.label_stats = _label_stats(self.labels, self.coi)
@@ -365,7 +383,7 @@ class LabeledVolumeDataset(VolumeDataset):
         if weight_balancing is not None:
             print_frm('Precomputing balancing weights...')
             self.weights = [_balance_weights(l, type=self.weight_balancing, label_stats=self.label_stats[i][:-1])
-                            for i, l in enumerate(self.labels)]
+                            if l is not None else None for i, l in enumerate(self.labels)]
 
     def _sample_xy(self, data_index):
 
@@ -376,7 +394,8 @@ class LabeledVolumeDataset(VolumeDataset):
         # get random sample
         x, y = sample_synchronized([self.data[data_index], self.labels[data_index]], input_shape)
         x = normalize(x, type=self.norm_type)
-        y = y.astype(float)
+        if y is not None:
+            y = y.astype(float)
 
         # reorient sample
         x = _orient(x, orientation=self.orientation)
@@ -384,23 +403,31 @@ class LabeledVolumeDataset(VolumeDataset):
 
         # add channel axis if the data is 3D
         if self.input_shape[0] > 1:
-            x, y = x[np.newaxis, ...], y[np.newaxis, ...]
+            x = x[np.newaxis, ...]
+            if y is not None:
+                y = y[np.newaxis, ...]
 
         # select middle slice if multiple consecutive slices
         if self.in_channels > 1:
             c = self.in_channels // 2
-            y = y[c:c + 1]
+            if y is not None:
+                y = y[c:c + 1]
 
         # augment sample
         if self.transform is not None:
-            data = self.shared_transform(np.concatenate((x, y), axis=0))
-            p = x.shape[0]
-            x = self.x_transform(data[:p])
-            y = self.y_transform(data[p:])
+            if y is not None:
+                data = self.shared_transform(np.concatenate((x, y), axis=0))
+                p = x.shape[0]
+                x = self.x_transform(data[:p])
+                y = self.y_transform(data[p:])
+            else:
+                x = self.shared_transform(x)
+                x = self.x_transform(x)
 
         # transform to tensors
         x = torch.from_numpy(x).float()
-        y = torch.from_numpy(y).long()
+        if y is not None:
+            y = torch.from_numpy(y).long()
 
         return x, y
 
@@ -414,8 +441,9 @@ class LabeledVolumeDataset(VolumeDataset):
         x, y, w = sample_synchronized([self.data[data_index], self.labels[data_index], self.weights[data_index]],
                                       input_shape)
         x = normalize(x, type=self.norm_type)
-        y = y.astype(float)
-        w = w.astype(float)
+        if y is not None:
+            y = y.astype(float)
+            w = w.astype(float)
 
         # reorient sample
         x = _orient(x, orientation=self.orientation)
@@ -424,27 +452,34 @@ class LabeledVolumeDataset(VolumeDataset):
 
         # add channel axis if the data is 3D
         if self.input_shape[0] > 1:
-            x, y, w = x[np.newaxis, ...], y[np.newaxis, ...], w[np.newaxis, ...] = w[np.newaxis, ...]
+            x = x[np.newaxis, ...]
+            if y is not None:
+                y, w = y[np.newaxis, ...], w[np.newaxis, ...]
 
         # select middle slice if multiple consecutive slices
         if self.in_channels > 1:
             c = self.in_channels // 2
-            y = y[c:c + 1]
-            w = w[c:c + 1]
+            if y is not None:
+                y, w = y[c:c + 1], w[c:c + 1]
 
         # augment sample
         if self.transform is not None:
-            data = self.shared_transform(np.concatenate((x, y, w), axis=0))
-            p = x.shape[0]
-            q = y.shape[0]
-            x = self.x_transform(data[:p])
-            y = self.y_transform(data[p:p+q])
-            w = data[p+q:]
+            if y is not None:
+                data = self.shared_transform(np.concatenate((x, y, w), axis=0))
+                p = x.shape[0]
+                q = y.shape[0]
+                x = self.x_transform(data[:p])
+                y = self.y_transform(data[p:p+q])
+                w = data[p+q:]
+            else:
+                x = self.shared_transform(x)
+                x = self.x_transform(x)
 
         # transform to tensors
         x = torch.from_numpy(x).float()
-        y = torch.from_numpy(y).long()
-        w = torch.from_numpy(w).float()
+        if y is not None:
+            y = torch.from_numpy(y).long()
+            w = torch.from_numpy(w).float()
 
         return x, y, w
 
@@ -510,7 +545,7 @@ class LabeledVolumeDataset(VolumeDataset):
             r = np.arange(len(self.data), dtype=int)
 
             # make sure we have at least one labeled pixel in the sample, otherwise processing is useless
-            if np.sum([len(np.intersect1d(torch.unique(y_).numpy(), self.coi)) for y_ in ys]) == 0 and not self.warned:
+            if np.sum([len(np.intersect1d(torch.unique(y_).numpy(), self.coi)) if y_ is not None else 1 for y_ in ys]) == 0 and not self.warned:
                 if attempt < MAX_SAMPLING_ATTEMPTS:
                     if self.weight_balancing is not None:
                         x, y, w = self.__getitem__(i, attempt=attempt + 1)
@@ -519,6 +554,13 @@ class LabeledVolumeDataset(VolumeDataset):
                 else:
                     warnings.warn("No labeled pixels found after %d sampling attempts! " % attempt)
                     self.warned = True
+
+        # dataloader does not support None types, send empty array instead
+        for j in range(len(y)):
+            if y[j] is None:
+                y[j] = np.zeros(0)
+                if self.weight_balancing is not None:
+                    w[j] = np.zeros(0)
 
         # return sample
         if self.return_domain:
@@ -861,3 +903,89 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
                 return r, x, y
             else:
                 return x, y
+
+
+class UnlabeledSlidingWindowDataset(SlidingWindowDataset):
+    """
+    Dataset for unlabeled volumes with a sliding window
+
+    :param data: input data, possible formats
+            - path to the dataset (string)
+            - preloaded 3D volume (numpy array)
+            - list of paths to multiple datasets (list of strings)
+            - list of preloaded 3D volumes (list of numpy arrays)
+    :param input_shape: 3-tuple that specifies the input shape for sampling
+    :param optional scaling: 3-tuple used for rescaling the data, or a list of 3-tuples in case of multiple datasets
+    :param optional type: type of the volume file (tif2d, tif3d, tifseq, hdf5, png or pngseq)
+    :param optional in_channels: amount of subsequent slices to be sampled (only for 2D sampling)
+    :param optional orientations: list of orientations for sampling
+    :param optional batch_size: size of the sampling batch
+    :param optional data_dtype: type of the data (typically uint8)
+    :param optional norm_type: type of the normalization (unit, z or minmax)
+    :param optional transform: augmenter object
+    :param optional range_split: range of slices (start, stop) to select (normalized between 0 and 1), or a list of
+                                 2-tuples in case of multiple datasets
+    :param optional range_dir: orientation of the slicing or a list of orientations in case of multiple datasets
+    :param optional resolution: list of 3-tuples specifying the pixel resolution of the data
+    :param optional match_resolution_to: match the resolution of all data to a specific dataset
+    :param optional return_domain: return the domain id during iterating
+    """
+
+    def __init__(self, data, input_shape=None, scaling=None, type='tif3d', in_channels=1, orientations=(0,),
+                 batch_size=1, data_dtype='uint8', norm_type='unit', transform=None, range_split=None, range_dir=None,
+                 resolution=None, match_resolution_to=None, return_domain=False):
+        super().__init__(data, input_shape, scaling=scaling, type=type, in_channels=in_channels,
+                         orientations=orientations, batch_size=batch_size, dtype=data_dtype, norm_type=norm_type,
+                         range_split=range_split, range_dir=range_dir, resolution=resolution,
+                         match_resolution_to=match_resolution_to, return_domain=return_domain)
+
+        self.transform = transform
+        if transform is not None:
+            self.shared_transform, self.x_transform, _ = split_segmentation_transforms(transform)
+        self.weight_balancing = None
+
+    def _sample_x(self, i):
+
+        # find dataset index
+        r = 0
+        szs = self.n_samples_dim.prod(axis=1)
+        while szs[:r + 1].sum() <= i:
+            r += 1
+
+        # get spatial location
+        j = i - szs[:r].sum()
+        iz = j // (self.n_samples_dim[r, 1] * self.n_samples_dim[r, 2])
+        iy = (j - iz * self.n_samples_dim[r, 1] * self.n_samples_dim[r, 2]) // self.n_samples_dim[r, 2]
+        ix = j - iz * self.n_samples_dim[r, 1] * self.n_samples_dim[r, 2] - iy * self.n_samples_dim[r, 2]
+        pz = self.input_shape[0] * iz
+        py = self.input_shape[1] * iy
+        px = self.input_shape[2] * ix
+
+        # get shape of sample
+        input_shape = _validate_shape(self.input_shape, self.data[r].shape, in_channels=self.in_channels)
+
+        # get sample
+        x = sample_synchronized([self.data[r]], input_shape, zyx=(pz, py, px))[0]
+        x = normalize(x, type=self.norm_type)
+
+        # add channel axis if the data is 3D
+        if self.input_shape[0] > 1:
+            x = x[np.newaxis, ...]
+
+        # augment sample
+        if self.transform is not None:
+            x = self.shared_transform(x)
+            x = self.x_transform(x)
+
+        # transform to tensors
+        x = torch.from_numpy(x).float()
+
+        return r, x
+
+    def __getitem__(self, i):
+
+        r, x = self._sample_x(i)
+        if self.return_domain:
+            return r, x
+        else:
+            return x
