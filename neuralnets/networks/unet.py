@@ -730,18 +730,22 @@ class UNet(pl.LightningModule):
         # select the center slice if 3D
         if x.ndim == 4:  # 2D data
             x = x[:, x.size(1) // 2, :, :]
-            y = y[:, 0, :, :]
+            if y is not None:
+                y = y[:, 0, :, :]
             y_ = np.argmax(y_pred.detach().cpu().numpy(), axis=1)
         else:  # 3D data
             s = x.size(2) // 2
             x = x[:, 0, s, :, :]
-            y = y[:, 0, s, :, :]
+            if y is not None:
+                y = y[:, 0, s, :, :]
             y_ = np.argmax(y_pred[:, :, s].detach().cpu().numpy(), axis=1)
 
         # overlay the image with the labels (boundary) and predictions (pixel-wise)
         x_ = np.zeros((x.size(0), x.size(1), x.size(2), 3))
         for b in range(x.size(0)):
-            tmp = overlay(x[b].cpu().numpy(), y[b].cpu().numpy(), colors=COLORS, boundaries=True)
+            tmp = x[b].cpu().numpy()
+            if y is not None:
+                tmp = overlay(tmp, y[b].cpu().numpy(), colors=COLORS, boundaries=True)
             x_[b] = overlay(tmp, y_[b], colors=COLORS)
 
         tensorboard.add_images(prefix + '/prediction', x_, global_step=self.current_epoch, dataformats='NHWC')
