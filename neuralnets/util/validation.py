@@ -652,12 +652,13 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
                                                            classes_of_interest)
 
     # compute validation metrics
-    js, ams = _compute_validation_metrics(js_cum, ams_cum, classes_of_interest)
+    if labels is not None:
+        js, ams = _compute_validation_metrics(js_cum, ams_cum, classes_of_interest)
 
     # report validation metrics if necessary
     if track_progress:
         print()
-    if report:
+    if report and labels is not None:
         _report_validation(js, ams, classes_of_interest)
 
     # save the results if necessary
