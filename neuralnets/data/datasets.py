@@ -3,7 +3,7 @@ import warnings
 
 import numpy as np
 
-from neuralnets.util.tools import sample_unlabeled_input, sample_synchronized, normalize
+from neuralnets.util.tools import sample_unlabeled_input, sample_synchronized, normalize, set_seed
 from neuralnets.util.augmentation import split_segmentation_transforms
 from neuralnets.data.base import *
 
@@ -73,14 +73,18 @@ def _validate_shape(input_shape, data_shape, orientation=0, in_channels=1, level
     return tuple(input_shape)
 
 
-def _select_labels(y, frac=1.0):
+def _select_labels(y, frac=1.0, mode='random_slices', dim=0, seed=None):
     """
-    Selects a fraction of the labels in a dataset. We do this by randomly selecting a crop from the data that has
-    a similar label distribution compared to the original volume.
+    Selects a fraction of the labels in a dataset.
 
-    :param y:
-    :param frac:
-    :return:
+    :param y: labels
+    :param frac: fraction to be sampled
+    :param mode: mode of the label selection
+        - random_slices: randomly selects slices from the labels (default)
+        - balanced: for each class a number of slices is selected so that the class frequency remains the same
+    :param dim: dimension to select slices (if mode == 'random_slices')
+    :param seed: seed for randomization
+    :return: a subset of the labels
     """
 
     def _find_optimum(x, target, n, labels, dim):
@@ -106,11 +110,8 @@ def _select_labels(y, frac=1.0):
         else:
             return int(labels.shape[dim] * x)
 
-    if frac == 0:
-        y_ = np.zeros_like(y) + 255
-    elif frac == 1:
-        y_ = y
-    else:
+    def _select_balanced(y, frac):
+
         # get the frequency of all unique class labels
         u, cnts = np.unique(y, return_counts=True)
         # select the classes
@@ -129,7 +130,43 @@ def _select_labels(y, frac=1.0):
             # select the class pixels
             y_[:r][y[:r] == c] = c
 
-    return y_
+        return y_
+
+    def _select_random(y, frac, dim):
+
+        # initialize
+        y_ = np.zeros_like(y) + 255
+
+        # find amount of slices
+        sz = y.shape
+        n = int(sz[dim] * frac)
+        if n == 0:
+            raise ValueError('A fraction of %f and a labeled volume of shape %s results in no slices' % (frac, str(sz)))
+
+        # select slices
+        if dim == 0:
+            y_[:n, :, :] = y[:n, :, :]
+        elif dim == 1:
+            y_[:, :n, :] = y[:, :n, :]
+        else:
+            y_[:, :, :n] = y[:, :, :n]
+
+        return y_
+
+    # set seed for randomization
+    if seed is not None:
+        set_seed(seed)
+
+    if frac == 0:
+        return np.zeros_like(y) + 255
+    elif frac == 1:
+        return y
+
+    # sample selection
+    if mode == 'balanced':
+        return _select_balanced(y, frac)
+    else:
+        return _select_random(y, frac, dim)
 
 
 def _map_cois(y, coi):
