@@ -665,7 +665,11 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
     if val_file is not None:
         _save_validation(js, ams, val_file)
 
-    return js, ams
+    # return scores if labels were provided, otherwise return nothing
+    if labels is not None:
+        return js, ams
+    else:
+        return
 
 
 def segment_ram(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
