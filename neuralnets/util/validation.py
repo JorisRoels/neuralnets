@@ -472,11 +472,15 @@ def _validate_ram(segmentation, labels, classes_of_interest=(0, 1), hausdorff=Fa
     """
 
     # compute metrics
+    print_frm('filtering')
     all_labeled = np.sum(labels == 255) == 0
     w = None if all_labeled else labels != 255
     comp_hausdorff = all_labeled and hausdorff
+    print_frm('jaccard')
     js = np.asarray([iou(labels == c, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
+    print_frm('accuracy')
     ams = np.asarray([accuracy_metrics(labels == c, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
+    print_frm('hausdorf')
     hs = np.zeros_like(js)
     for i, c in enumerate(classes_of_interest):
         if comp_hausdorff:
