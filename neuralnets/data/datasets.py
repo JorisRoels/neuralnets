@@ -139,17 +139,21 @@ def _select_labels(y, frac=1.0, mode='random_slices', dim=0, seed=None):
 
         # find amount of slices
         sz = y.shape
-        n = int(sz[dim] * frac)
+        n = int(np.ceil(sz[dim] * frac))
         if n == 0:
             raise ValueError('A fraction of %f and a labeled volume of shape %s results in no slices' % (frac, str(sz)))
 
         # select slices
-        if dim == 0:
-            y_[:n, :, :] = y[:n, :, :]
-        elif dim == 1:
-            y_[:, :n, :] = y[:, :n, :]
-        else:
-            y_[:, :, :n] = y[:, :, :n]
+        np.random.seed(seed)
+        ns = np.random.permutation(np.arange(sz[dim]))[:n]
+        for d in range(sz[dim]):
+            if d in ns:
+                if dim == 0:
+                    y_[d, :, :] = y[d, :, :]
+                elif dim == 1:
+                    y_[:, d, :] = y[:, d, :]
+                else:
+                    y_[:, :, d] = y[:, :, d]
 
         return y_
 
@@ -343,13 +347,14 @@ class LabeledVolumeDataset(VolumeDataset):
     :param optional weight_balancing: balance classes, we currently support
             - inverse_class_balancing: class frequencies are balanced
             - inverse_size_balancing: object size is balanced
+    :param optional seed: seed for consequent partial labeling
     """
 
     def __init__(self, data, labels, input_shape=None, scaling=None, len_epoch=None, type='tif3d', coi=(0, 1),
                  in_channels=1, orientations=(0,), batch_size=1, data_dtype='uint8', label_dtype='uint8',
                  norm_type='unit', transform=None, range_split=None, range_dir=None, resolution=None,
                  match_resolution_to=None, sampling_type='joint', return_domain=False, partial_labels=1,
-                 weight_balancing=None):
+                 weight_balancing=None, seed=None):
         super().__init__(data, input_shape, scaling=scaling, len_epoch=len_epoch, type=type,
                          in_channels=in_channels, orientations=orientations, batch_size=batch_size, dtype=data_dtype,
                          norm_type=norm_type, range_split=range_split, range_dir=range_dir, resolution=resolution,
@@ -379,6 +384,7 @@ class LabeledVolumeDataset(VolumeDataset):
             self.shared_transform, self.x_transform, self.y_transform = split_segmentation_transforms(transform)
         self.partial_labels = partial_labels
         self.weight_balancing = weight_balancing
+        self.seed = seed
 
         # select a subset of slices of the data
         for i in range(len(self.labels)):
@@ -406,9 +412,9 @@ class LabeledVolumeDataset(VolumeDataset):
         for i in range(len(self.labels)):
             if self.labels[i] is not None:
                 if isinstance(self.partial_labels, list) or isinstance(self.partial_labels, tuple):
-                    self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels[i])
+                    self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels[i], seed=seed)
                 else:
-                    self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels)
+                    self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels, seed=seed)
 
         # relabel classes of interest
         self.labels = [_map_cois(l, self.coi) if l is not None else None for l in self.labels]
