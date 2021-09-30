@@ -46,8 +46,11 @@ def sliding_window_multichannel(image, step_size, window_size, in_channels=1, tr
 
     # loop over the range
     zrng = trange(len(zrange), desc='Progress z-axis') if track_progress else range(len(zrange))
-    yrng = trange(len(yrange), desc='Progress y-axis', leave=False) if track_progress else range(len(yrange))
-    xrng = trange(len(xrange), desc='Progress x-axis', leave=False) if track_progress else range(len(xrange))
+    # there seems to be an issue with tqdm and nested for loops
+    # yrng = trange(len(yrange), desc='Progress y-axis', leave=False) if track_progress else range(len(yrange))
+    # xrng = trange(len(xrange), desc='Progress x-axis', leave=False) if track_progress else range(len(xrange))
+    yrng = range(len(yrange))
+    xrng = range(len(xrange))
     for i in zrng:
         for j in yrng:
             for k in xrng:
@@ -394,8 +397,11 @@ def _segment_z_block(z_block, net, sub_block_size, overlap_size, input_shape, in
     weight_wnd_ = gaussian_window((sub_block_size[0], sub_block_size[2], sub_block_size[1]), sigma=sigma_wgt_window)
     y_range = list(range(0, y, yb))
     x_range = list(range(0, x, xb))
-    y_rng = trange(len(y_range), desc='Progress y-axis', leave=False) if track_progress else range(len(y_range))
-    x_rng = trange(len(x_range), desc='Progress x-axis', leave=False) if track_progress else range(len(x_range))
+    # there seems to be an issue with tqdm and nested for loops
+    # y_rng = trange(len(y_range), desc='Progress y-axis', leave=False) if track_progress else range(len(y_range))
+    # x_rng = trange(len(x_range), desc='Progress x-axis', leave=False) if track_progress else range(len(x_range))
+    y_rng = range(len(y_range))
+    x_rng = range(len(x_range))
     for j in y_rng:
         yj = y_range[j]
         yb_start = np.maximum(0, yj - yo)
@@ -408,7 +414,7 @@ def _segment_z_block(z_block, net, sub_block_size, overlap_size, input_shape, in
             block = z_block[:, yb_start:yb_stop, xb_start:xb_stop]
             segmented_block = segment(block, net, input_shape, in_channels=in_channels, batch_size=batch_size,
                                       step_size=step_size, train=train, device=device, orientations=orientations,
-                                      normalization=normalization)
+                                      normalization=normalization, track_progress=False)
             if block.shape == sub_block_size:
                 weight_wnd = weight_wnd_
             else:
