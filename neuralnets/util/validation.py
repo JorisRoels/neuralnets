@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
-from progress.bar import Bar
+from tqdm.auto import trange
 
 from neuralnets.util.io import read_volume, write_volume, print_frm, mkdir
 from neuralnets.util.numpy.metrics import iou, accuracy_metrics, hausdorff_distance, _iou_part_metrics, \
@@ -45,11 +45,17 @@ def sliding_window_multichannel(image, step_size, window_size, in_channels=1, tr
     xrange[-1] = image.shape[3] - window_size[2]
 
     # loop over the range
-    if track_progress:
-        bar = Bar('Progress', max=len(zrange) * len(yrange) * len(xrange))
-    for z in zrange:
-        for y in yrange:
-            for x in xrange:
+    zrng = trange(len(zrange), desc='Progress z-axis') if track_progress else range(len(zrange))
+    yrng = trange(len(yrange), desc='Progress y-axis', leave=False) if track_progress else range(len(yrange))
+    xrng = trange(len(xrange), desc='Progress x-axis', leave=False) if track_progress else range(len(xrange))
+    for i in zrng:
+        for j in yrng:
+            for k in xrng:
+
+                # get window location
+                z = zrange[i]
+                y = yrange[j]
+                x = xrange[k]
 
                 # yield the current window
                 if is2d:
@@ -59,11 +65,6 @@ def sliding_window_multichannel(image, step_size, window_size, in_channels=1, tr
                     yield (z, y, x, image[:, z:z + window_size[0], y:y + window_size[1], x:x + window_size[2]])
                 input = normalize(input, type=normalization)
                 yield (z, y, x, input)
-
-                if track_progress:
-                    bar.next()
-    if track_progress:
-        bar.finish()
 
 
 def _init_step_size(step_size, input_shape, is2d):
@@ -382,7 +383,7 @@ def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, st
 
 def _segment_z_block(z_block, net, sub_block_size, overlap_size, input_shape, in_channels=1, batch_size=1,
                      step_size=None, train=False, track_progress=False, device=0, orientations=(0,),
-                     normalization='unit', bar=None):
+                     normalization='unit'):
     z, y, x = z_block.shape
     yb, xb = sub_block_size[1:]
     yo, xo = overlap_size[1:]
@@ -391,16 +392,23 @@ def _segment_z_block(z_block, net, sub_block_size, overlap_size, input_shape, in
     wgt_cum = np.zeros(z_block.shape)
     sigma_wgt_window = np.min(sub_block_size[1:]) / 4
     weight_wnd_ = gaussian_window((sub_block_size[0], sub_block_size[2], sub_block_size[1]), sigma=sigma_wgt_window)
-    for j in range(0, y, yb):
-        yb_start = np.maximum(0, j - yo)
-        yb_stop = np.minimum(j + yb + yo, y)
-        for k in range(0, x, xb):
-            xb_start = np.maximum(0, k - xo)
-            xb_stop = np.minimum(k + xb + xo, x)
+    y_range = list(range(0, y, yb))
+    x_range = list(range(0, x, xb))
+    y_rng = trange(len(y_range), desc='Progress y-axis', leave=False) if track_progress else range(len(y_range))
+    x_rng = trange(len(x_range), desc='Progress x-axis', leave=False) if track_progress else range(len(x_range))
+    for j in y_rng:
+        yj = y_range[j]
+        yb_start = np.maximum(0, yj - yo)
+        yb_stop = np.minimum(yj + yb + yo, y)
+        for k in x_rng:
+            xk = x_range[k]
+            xb_start = np.maximum(0, xk - xo)
+            xb_stop = np.minimum(xk + xb + xo, x)
 
             block = z_block[:, yb_start:yb_stop, xb_start:xb_stop]
             segmented_block = segment(block, net, input_shape, in_channels=in_channels, batch_size=batch_size,
-                                      step_size=step_size, train=train, device=device, orientations=orientations, normalization=normalization)
+                                      step_size=step_size, train=train, device=device, orientations=orientations,
+                                      normalization=normalization)
             if block.shape == sub_block_size:
                 weight_wnd = weight_wnd_
             else:
@@ -411,23 +419,28 @@ def _segment_z_block(z_block, net, sub_block_size, overlap_size, input_shape, in
                     = seg_cum[c, :, yb_start:yb_stop, xb_start:xb_stop] + weight_wnd * segmented_block[c]
             wgt_cum[:, yb_start:yb_stop, xb_start:xb_stop] = wgt_cum[:, yb_start:yb_stop, xb_start:xb_stop] + weight_wnd
 
-            if track_progress:
-                bar.next()
-
     for c in range(net.out_channels):
         seg_cum[c] = seg_cum[c] / wgt_cum
 
     return seg_cum
 
 
-def _cumulate_validation_metrics(z_block_pred, z_block_labels, js_cum, ams_cum, classes_of_interest):
+def _cumulate_validation_metrics(z_block_pred, z_block_labels, js_cum, ams_cum, classes_of_interest, remap_labels=None):
+
+    # preparation
     all_labeled = np.sum(z_block_labels == 255) == 0
     w = None if all_labeled else z_block_labels != 255
 
-    js = np.asarray(
-        [_iou_part_metrics(z_block_labels == c, z_block_pred[i], w=w) for i, c in enumerate(classes_of_interest)])
-    ams = np.asarray(
-        [_conf_matrix_metrics(z_block_labels == c, z_block_pred[i], w=w) for i, c in enumerate(classes_of_interest)])
+    # remap labels if necessary
+    if remap_labels is not None:
+        predictions = [None] * 255
+        for i in range(z_block_pred.shape[0]):
+            predictions[remap_labels[i]] = z_block_pred[i]
+    else:
+        predictions = z_block_pred
+
+    js = np.asarray([_iou_part_metrics(z_block_labels == c, predictions[c], w=w) for c in classes_of_interest])
+    ams = np.asarray([_conf_matrix_metrics(z_block_labels == c, predictions[c], w=w) for c in classes_of_interest])
 
     js_cum += js
     ams_cum += ams
@@ -463,7 +476,7 @@ def _validate_ram(segmentation, labels, classes_of_interest=(0, 1), hausdorff=Fa
     """
     Validate a segmentation based on available labels
 
-    :param segmentation: 4D array (C, Z, Y, X) representing the a class probability distribution over the 3D image
+    :param segmentation: 4D array (C, Z, Y, X) representing the class probability distribution over the 3D image
     :param labels: 3D array (Z, Y, X) representing the 3D labels
     :param classes_of_interest: index of the label of interest
     :param hausdorff: compute hausdorff or not
@@ -471,20 +484,23 @@ def _validate_ram(segmentation, labels, classes_of_interest=(0, 1), hausdorff=Fa
     :return: validation results, i.e. accuracy, precision, recall, f-score, jaccard and dice score
     """
 
-    # compute metrics
-    print_frm('filtering')
+    # preparation
     all_labeled = np.sum(labels == 255) == 0
     w = None if all_labeled else labels != 255
     comp_hausdorff = all_labeled and hausdorff
-    print_frm('jaccard')
-    js = np.asarray([iou(labels == c, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
-    print_frm('accuracy')
-    ams = np.asarray([accuracy_metrics(labels == c, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
-    print_frm('hausdorf')
+
+    # remap labels
+    predictions = [None] * 255
+    for i in range(segmentation.shape[0]):
+        predictions[classes_of_interest[i]] = segmentation[i]
+
+    # compute metrics
+    js = np.asarray([iou(labels == c, predictions[c], w=w) for c in classes_of_interest])
+    ams = np.asarray([accuracy_metrics(labels == c, predictions[c], w=w) for c in classes_of_interest])
     hs = np.zeros_like(js)
-    for i, c in enumerate(classes_of_interest):
+    for c in classes_of_interest:
         if comp_hausdorff:
-            hs[i] = hausdorff_distance(labels == c, segmentation[i])[0]
+            hs[i] = hausdorff_distance(labels == c, predictions[i])[0]
         else:
             hs[i] = -1
 
@@ -573,12 +589,6 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
     js_cum = np.zeros((len(classes_of_interest), 3))
     ams_cum = np.zeros((len(classes_of_interest), 4))
 
-    # initialize progress bar
-    if track_progress:
-        bar = Bar('Progress', max=len(range(0, z, zb)) * len(range(0, y, yb)) * len(range(0, x, xb)))
-    else:
-        bar = None
-
     # first check whether there are at least zb slices
     # if not, we can straightforward segment the z-block
     if z <= zb:
@@ -586,7 +596,7 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
         z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
                                              in_channels=in_channels, batch_size=batch_size, step_size=step_size,
                                              train=train, track_progress=track_progress, device=device,
-                                             orientations=orientations, normalization=normalization, bar=bar)
+                                             orientations=orientations, normalization=normalization)
         if write_dir is not None:
             write_segmentation(z_block_segmented, write_dir, classes_of_interest=classes_of_interest, index_inc=start)
         if labels is not None:
@@ -596,60 +606,71 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
 
     else:
 
-        # segment the first z-block
-        z_block = read_volume(data, type=type, start=start, stop=start + zb)
-        z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
-                                             in_channels=in_channels,
-                                             batch_size=batch_size, step_size=step_size, train=train,
-                                             track_progress=track_progress, device=device, orientations=orientations,
-                                             normalization=normalization, bar=bar)
+        # progress bar related stuff
+        z_range = list(range(0, z, zb))
+        z_rng = trange(len(z_range), desc='Progress z-axis') if track_progress else range(len(z_range))
 
         # process the remaining z-blocks
         j = 0
-        for i in range(zb, z, zb):
-            z_start = i - zo
-            z_stop = np.minimum(i + zb, z)
-            z_block_prev = z_block_segmented
-            z_block = read_volume(data, type=type, start=start + z_start, stop=start + z_stop)
-            # overlapping region is in slices zb-zo through zb in z_block_prev and 0 through zo in z_block
+        z_block_segmented = None
+        for i in z_rng:
 
-            # segment z_block
-            z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
-                                                 in_channels=in_channels, batch_size=batch_size, step_size=step_size,
-                                                 train=train, track_progress=track_progress, device=device,
-                                                 orientations=orientations, normalization=normalization, bar=bar)
+            if i == 0:
 
-            # merge overlapping regions in two z_blocks
-            w = np.arange(1, zo + 1, 1) / zo
-            w = np.ones((y, x))[np.newaxis, ...] * w[:, np.newaxis, np.newaxis]
-            w_ = 1 - w
-            for c in range(net.out_channels):
-                z_block_prev[c, -zo:] = w * z_block_prev[c, -zo:] + w_ * z_block_segmented[c, :zo]
+                # segment the first z-block
+                z_block = read_volume(data, type=type, start=start, stop=start + zb)
+                z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
+                                                     in_channels=in_channels, batch_size=batch_size,
+                                                     step_size=step_size, train=train, track_progress=track_progress,
+                                                     device=device, orientations=orientations,
+                                                     normalization=normalization)
 
-            # z_block_prev is completely segmented, ready to write out and validate
-            if write_dir is not None:
-                if i == zb:
-                    write_segmentation(z_block_prev, write_dir, classes_of_interest=classes_of_interest,
-                                        index_inc=start)
-                else:
-                    write_segmentation(z_block_prev[:, zo:], write_dir, classes_of_interest=classes_of_interest,
-                                        index_inc=start + j * zb)
-            if labels is not None:
-                if i == zb:
-                    z_block_labels = read_volume(labels, type=type, start=start, stop=start + zb)
-                    js_cum, ams_cum = _cumulate_validation_metrics(z_block_prev, z_block_labels, js_cum, ams_cum,
-                                                                   classes_of_interest)
-                else:
-                    z_block_labels = read_volume(labels, type=type, start=start + j * zb, stop=start + (j + 1) * zb)
-                    js_cum, ams_cum = _cumulate_validation_metrics(z_block_prev[:, zo:], z_block_labels, js_cum,
-                                                                   ams_cum, classes_of_interest)
+            else:
 
-            j += 1
+                zi = z_range[i]
+                z_start = zi - zo
+                z_stop = np.minimum(zi + zb, z)
+                z_block_prev = z_block_segmented
+                z_block = read_volume(data, type=type, start=start + z_start, stop=start + z_stop)
+                # overlapping region is in slices zb-zo through zb in z_block_prev and 0 through zo in z_block
+
+                # segment z_block
+                z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
+                                                     in_channels=in_channels, batch_size=batch_size, step_size=step_size,
+                                                     train=train, track_progress=track_progress, device=device,
+                                                     orientations=orientations, normalization=normalization)
+
+                # merge overlapping regions in two z_blocks
+                w = np.arange(1, zo + 1, 1) / zo
+                w = np.ones((y, x))[np.newaxis, ...] * w[:, np.newaxis, np.newaxis]
+                w_ = 1 - w
+                for c in range(net.out_channels):
+                    z_block_prev[c, -zo:] = w * z_block_prev[c, -zo:] + w_ * z_block_segmented[c, :zo]
+
+                # z_block_prev is completely segmented, ready to write out and validate
+                if write_dir is not None:
+                    if zi == zb:
+                        write_segmentation(z_block_prev, write_dir, classes_of_interest=classes_of_interest,
+                                           index_inc=start)
+                    else:
+                        write_segmentation(z_block_prev[:, zo:], write_dir, classes_of_interest=classes_of_interest,
+                                           index_inc=start + j * zb)
+                if labels is not None:
+                    if zi == zb:
+                        z_block_labels = read_volume(labels, type=type, start=start, stop=start + zb)
+                        js_cum, ams_cum = _cumulate_validation_metrics(z_block_prev, z_block_labels, js_cum, ams_cum,
+                                                                       classes_of_interest)
+                    else:
+                        z_block_labels = read_volume(labels, type=type, start=start + j * zb, stop=start + (j + 1) * zb)
+                        js_cum, ams_cum = _cumulate_validation_metrics(z_block_prev[:, zo:], z_block_labels, js_cum,
+                                                                       ams_cum, classes_of_interest)
+
+                j += 1
 
         # write out and validate last block
         if write_dir is not None:
             write_segmentation(z_block_segmented[:, zo:], write_dir, classes_of_interest=classes_of_interest,
-                                index_inc=start + j * zb)
+                               index_inc=start + j * zb)
         if labels is not None:
             z_block_labels = read_volume(labels, type=type, start=start + j * zb, stop=start + z)
             js_cum, ams_cum = _cumulate_validation_metrics(z_block_segmented[:, zo:], z_block_labels, js_cum, ams_cum,
@@ -769,7 +790,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :param labels: 3D array (Z, Y, X) representing the 3D labels, or a directory that specifies to it (if RAM is limited)
     :param input_size: size of the inputs (either 2 or 3-tuple) for processing
     :param in_channels: Amount of subsequent slices that serve as input for the network (should be odd)
-    :param classes_of_interest: index of the label of interest
+    :param classes_of_interest: index of the label of interest (length should match the amount of network output channels)
     :param batch_size: batch size for processing
     :param write_dir: optionally, specify a directory to write the output
     :param val_file: optionally, specify a file to write the validation results

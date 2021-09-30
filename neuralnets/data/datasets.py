@@ -1,8 +1,6 @@
 
 import warnings
 
-import numpy as np
-
 from neuralnets.util.tools import sample_unlabeled_input, sample_synchronized, normalize, set_seed
 from neuralnets.util.augmentation import split_segmentation_transforms
 from neuralnets.data.base import *
@@ -187,6 +185,23 @@ def _map_cois(y, coi):
     y_[y == 255] = 255
     for i, c in enumerate(coi_):
         y_[y == c] = i
+
+    return y_
+
+
+def _unmap_cois(y, coi):
+    """
+    Unmaps the classes of interest to the original labels
+
+    :return: original class labels
+    """
+
+    coi_ = list(coi)
+    coi_.sort()
+    y_ = np.zeros_like(y)
+    y_[y == 255] = 255
+    for i, c in enumerate(coi_):
+        y_[y == i] = c
 
     return y_
 
@@ -617,6 +632,15 @@ class LabeledVolumeDataset(VolumeDataset):
             else:
                 return x, y
 
+    def get_original_labels(self):
+        """
+        Unmaps the classes of interest to the original labels
+
+        :return: original class labels
+        """
+
+        return [_unmap_cois(labels, self.coi) for labels in self.labels]
+
 
 class UnlabeledVolumeDataset(VolumeDataset):
     """
@@ -946,6 +970,15 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
                 return r, x, y
             else:
                 return x, y
+
+    def get_original_labels(self):
+        """
+        Unmaps the classes of interest to the original labels
+
+        :return: original class labels
+        """
+
+        return [_unmap_cois(labels, self.coi) for labels in self.labels]
 
 
 class UnlabeledSlidingWindowDataset(SlidingWindowDataset):
