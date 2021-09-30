@@ -19,7 +19,7 @@ from neuralnets.networks.unet import UNet2D
 from neuralnets.util.augmentation import *
 from neuralnets.util.io import print_frm
 from neuralnets.util.tools import set_seed, parse_params
-from neuralnets.util.validation import write_segmentation
+from neuralnets.util.validation import validate
 
 
 if __name__ == '__main__':
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     """
     print_frm('Parsing arguments')
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", help="Path to the configuration file", type=str, default='neuralnets/train/unet_2d.yaml')
+    parser.add_argument("--config", "-c", help="Path to the configuration file", type=str, default='unet_2d.yaml')
     args = parser.parse_args()
     with open(args.config) as file:
         params = parse_params(yaml.load(file, Loader=yaml.FullLoader))
@@ -51,15 +51,15 @@ if __name__ == '__main__':
     train = LabeledVolumeDataset(params['data'], params['labels'], input_shape=input_shape,
                                  in_channels=params['in_channels'], type=params['type'],
                                  batch_size=params['train_batch_size'], transform=transform, range_split=(0, split[0]),
-                                 range_dir=params['split_orientation'])
+                                 range_dir=params['split_orientation'], coi=params['coi'])
     val = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape,
                                       in_channels=params['in_channels'], type=params['type'],
                                       batch_size=params['test_batch_size'], range_split=(split[0], split[1]),
-                                      range_dir=params['split_orientation'])
+                                      range_dir=params['split_orientation'], coi=params['coi'])
     test = LabeledSlidingWindowDataset(params['data'], params['labels'], input_shape=input_shape,
                                        in_channels=params['in_channels'], type=params['type'],
                                        batch_size=params['test_batch_size'], range_split=(split[1], 1),
-                                       range_dir=params['split_orientation'])
+                                       range_dir=params['split_orientation'], coi=params['coi'])
     train_loader = DataLoader(train, batch_size=params['train_batch_size'], num_workers=params['num_workers'],
                               pin_memory=True)
     val_loader = DataLoader(val, batch_size=params['test_batch_size'], num_workers=params['num_workers'],
@@ -95,17 +95,11 @@ if __name__ == '__main__':
     trainer.fit(net, train_loader, val_loader)
 
     """
-        Testing the network
+        Validate the network
     """
-    print_frm('Testing network')
-    trainer.test(net, test_loader)
-
-    """
-        Write the test segmentation result
-    """
-    print_frm('Writing segmentation of the test set')
+    print_frm('Validating the network')
     net.load_state_dict(torch.load(trainer.checkpoint_callback.best_model_path)['state_dict'])
-    segmentation = net.segment(test.data[0], input_shape=input_shape, in_channels=params['in_channels'],
-                               device=params['gpus'][0], batch_size=params['test_batch_size'])
-    write_segmentation(segmentation, write_dir=os.path.join(params['log_dir'], 'test_segmentation'),
-                       classes_of_interest=params['coi'])
+    validate(net, test.data[0], test.get_original_labels()[0], params['input_size'], in_channels=params['in_channels'],
+             classes_of_interest=params['coi'], batch_size=params['test_batch_size'],
+             write_dir=os.path.join(params['log_dir'], 'test_segmentation'), track_progress=True,
+             device=params['gpus'][0])

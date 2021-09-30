@@ -7,17 +7,19 @@
 """
 import argparse
 import yaml
-
+import os
 import pytorch_lightning as pl
+
+from multiprocessing import freeze_support
 from torch.utils.data import DataLoader
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 from neuralnets.data.datasets import LabeledVolumeDataset, LabeledSlidingWindowDataset
 from neuralnets.networks.unet import DenseUNet2D
 from neuralnets.util.augmentation import *
 from neuralnets.util.io import print_frm
 from neuralnets.util.tools import set_seed, parse_params
-
-from multiprocessing import freeze_support
+from neuralnets.util.validation import validate
 
 if __name__ == '__main__':
     freeze_support()
@@ -82,15 +84,19 @@ if __name__ == '__main__':
     """
     print_frm('Starting training')
     print_frm('Training with loss: %s' % params['loss'])
-    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
+    checkpoint_callback = ModelCheckpoint(save_top_k=1, verbose=True, monitor='val/mIoU', mode='max')
     trainer = pl.Trainer(max_epochs=params['epochs'], gpus=params['gpus'], accelerator=params['accelerator'],
                          default_root_dir=params['log_dir'], flush_logs_every_n_steps=params['log_freq'],
-                         log_every_n_steps=params['log_freq'], callbacks=[lr_monitor],
+                         log_every_n_steps=params['log_freq'], callbacks=[checkpoint_callback],
                          progress_bar_refresh_rate=params['log_refresh_rate'])
     trainer.fit(net, train_loader, val_loader)
 
     """
-        Testing the network
+        Validate the network
     """
-    print_frm('Testing network')
-    trainer.test(net, test_loader)
+    print_frm('Validating the network')
+    net.load_state_dict(torch.load(trainer.checkpoint_callback.best_model_path)['state_dict'])
+    validate(net, test.data[0], test.get_original_labels()[0], params['input_size'], in_channels=params['in_channels'],
+             classes_of_interest=params['coi'], batch_size=params['test_batch_size'],
+             write_dir=os.path.join(params['log_dir'], 'test_segmentation'), track_progress=True,
+             device=params['gpus'][0])
