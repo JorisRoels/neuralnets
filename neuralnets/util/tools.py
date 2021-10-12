@@ -2,6 +2,7 @@ import random
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 import torchvision.utils as vutils
 
 from neuralnets.util.io import read_volume, mkdir
@@ -580,4 +581,52 @@ def train_test_split(x, y=None, test_size=0.33):
         x_train, x_test = np.split(x, [s], d)
         y_train, y_test = np.split(y, [s], d)
         return x_train, y_train, x_test, y_test
+
+
+def pad(x, target_shape, mode='constant'):
+    """
+    Pad a tensor to specific size while keeping the input centered
+
+    :return:
+    :param x: input tensor
+    :param target_shape: target padding size
+    :param mode: padding mode (default: constant)
+    :return: padded tensor
+    """
+
+    orig_shape = x.shape
+    diff = np.asarray(target_shape) - np.asarray(orig_shape)
+    diff_2 = diff // 2
+    padding_sz = [(d, t-d) for d, t in zip(diff_2, diff)]
+    padding_sz.reverse()
+    padding_sz = tuple(np.concatenate(padding_sz, dtype=int))
+
+    return F.pad(x, padding_sz, mode=mode)
+
+
+def crop(x, target_shape, mode='central'):
+    """
+    Crop a tensor to specific size
+
+    :return:
+    :param x: input tensor
+    :param target_shape: target size
+    :param mode: cropping mode - options: central, begin, end (default: central)
+    :return: cropped tensor
+    """
+
+    ndim = x.ndim
+    orig_shape = x.shape
+    diff = np.asarray(orig_shape) - np.asarray(target_shape)
+    if mode == 'central':
+        diff_2 = diff // 2
+        for dim in range(ndim):
+            x = torch.split(x, [diff_2[dim], target_shape[dim] - diff_2[dim]], dim=dim)[1]
+    else:
+        split = target_shape - diff if mode == 'begin' else diff
+        i = 0 if mode == 'begin' else 1
+        for dim in range(ndim):
+            x = torch.split(x, split[dim] - diff[dim], dim=dim)[i]
+
+    return x
 
