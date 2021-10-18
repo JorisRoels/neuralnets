@@ -385,8 +385,7 @@ def segment_multichannel(data, net, input_shape, in_channels=1, batch_size=1, st
 
 
 def _segment_z_block(z_block, net, sub_block_size, overlap_size, input_shape, in_channels=1, batch_size=1,
-                     step_size=None, train=False, track_progress=False, device=0, orientations=(0,),
-                     normalization='unit'):
+                     step_size=None, train=False, device=0, orientations=(0,), normalization='unit'):
     z, y, x = z_block.shape
     yb, xb = sub_block_size[1:]
     yo, xo = overlap_size[1:]
@@ -470,12 +469,18 @@ def _compute_validation_metrics(js_cum, ams_cum, classes_of_interest):
     return js, ams
 
 
-def write_segmentation(segmentation, write_dir, classes_of_interest=(0, 1), index_inc=0):
+def write_segmentation(segmentation, write_dir, classes_of_interest=(0, 1), index_inc=0, write_probs=False):
     mkdir(write_dir)
-    segmentation_volume = np.argmax(segmentation, axis=0)
-    for i, c in enumerate(classes_of_interest):
-        segmentation_volume[segmentation_volume == i] = c
-    write_volume(segmentation_volume, write_dir, index_inc=index_inc, type='pngseq')
+    if write_probs:
+        for i, c in enumerate(classes_of_interest):
+            class_dir = os.path.join(write_dir, c)
+            mkdir(class_dir)
+            write_volume(segmentation[i] * 255, class_dir, index_inc=index_inc, type='pngseq')
+    else:
+        segmentation_volume = np.argmax(segmentation, axis=0)
+        for i, c in enumerate(classes_of_interest):
+            segmentation_volume[segmentation_volume == i] = c
+        write_volume(segmentation_volume, write_dir, index_inc=index_inc, type='pngseq')
 
 
 def _validate_ram(segmentation, labels, classes_of_interest=(0, 1), hausdorff=False, report=True):
@@ -544,7 +549,7 @@ def _save_validation(js, ams, val_file):
     np.save(val_file, np.concatenate((js[:, np.newaxis], ams), axis=1))
 
 
-def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size=(50, 1024, 1024),
+def segment_read(data, net, input_shape, write_dir, write_probs=False, start=0, stop=-1, block_size=(50, 1024, 1024),
                  overlap_size=(16, 128, 128), in_channels=1, batch_size=1, step_size=None, train=False,
                  track_progress=False, device=0, orientations=(0,), normalization='unit', type='pngseq', labels=None,
                  val_file=None, classes_of_interest=(0, 1), report=True):
@@ -563,6 +568,7 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
     :param overlap_size: overlap size for avoiding blocking artifacts
     :param in_channels: Amount of subsequent slices that serve as input for the network (should be odd)
     :param write_dir: destination for the segmentation, set this equal to None, in which case only validation will be performed
+    :param write_probs: flag that specifies whether to write probabilities, instead of thresholding
     :param batch_size: batch size for processing
     :param step_size: step size of the sliding window
     :param train: evaluate the network in training mode
@@ -601,10 +607,11 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
         z_block = read_volume(data, type=type, start=start, stop=stop)
         z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
                                              in_channels=in_channels, batch_size=batch_size, step_size=step_size,
-                                             train=train, track_progress=track_progress, device=device,
-                                             orientations=orientations, normalization=normalization)
+                                             train=train, device=device, orientations=orientations,
+                                             normalization=normalization)
         if write_dir is not None:
-            write_segmentation(z_block_segmented, write_dir, classes_of_interest=classes_of_interest, index_inc=start)
+            write_segmentation(z_block_segmented, write_dir, classes_of_interest=classes_of_interest, index_inc=start,
+                               write_probs=write_probs)
         if labels is not None:
             z_block_labels = read_volume(labels, type=type, start=start, stop=stop)
             js_cum, ams_cum = _cumulate_validation_metrics(z_block_segmented, z_block_labels, js_cum, ams_cum,
@@ -627,9 +634,8 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
                 z_block = read_volume(data, type=type, start=start, stop=start + zb)
                 z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
                                                      in_channels=in_channels, batch_size=batch_size,
-                                                     step_size=step_size, train=train, track_progress=track_progress,
-                                                     device=device, orientations=orientations,
-                                                     normalization=normalization)
+                                                     step_size=step_size, train=train, device=device,
+                                                     orientations=orientations, normalization=normalization)
 
             else:
 
@@ -643,8 +649,8 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
                 # segment z_block
                 z_block_segmented = _segment_z_block(z_block, net, (zb, yb, xb), (zo, yo, xo), input_shape,
                                                      in_channels=in_channels, batch_size=batch_size, step_size=step_size,
-                                                     train=train, track_progress=track_progress, device=device,
-                                                     orientations=orientations, normalization=normalization)
+                                                     train=train, device=device, orientations=orientations,
+                                                     normalization=normalization)
 
                 # merge overlapping regions in two z_blocks
                 w = np.arange(1, zo + 1, 1) / zo
@@ -657,10 +663,10 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
                 if write_dir is not None:
                     if zi == zb:
                         write_segmentation(z_block_prev, write_dir, classes_of_interest=classes_of_interest,
-                                           index_inc=start)
+                                           index_inc=start, write_probs=write_probs)
                     else:
                         write_segmentation(z_block_prev[:, zo:], write_dir, classes_of_interest=classes_of_interest,
-                                           index_inc=start + j * zb)
+                                           index_inc=start + j * zb, write_probs=write_probs)
                 if labels is not None:
                     if zi == zb:
                         z_block_labels = read_volume(labels, type=type, start=start, stop=start + zb)
@@ -676,7 +682,7 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
         # write out and validate last block
         if write_dir is not None:
             write_segmentation(z_block_segmented[:, zo:], write_dir, classes_of_interest=classes_of_interest,
-                               index_inc=start + j * zb)
+                               index_inc=start + j * zb, write_probs=write_probs)
         if labels is not None:
             z_block_labels = read_volume(labels, type=type, start=start + j * zb, stop=start + z)
             js_cum, ams_cum = _cumulate_validation_metrics(z_block_segmented[:, zo:], z_block_labels, js_cum, ams_cum,
@@ -704,8 +710,8 @@ def segment_read(data, net, input_shape, write_dir, start=0, stop=-1, block_size
 
 
 def segment_ram(data, net, input_shape, in_channels=1, batch_size=1, step_size=None, train=False, track_progress=False,
-                device=0, orientations=(0,), normalization='unit', write_dir=None, labels=None, val_file=None,
-                classes_of_interest=(0, 1), hausdorff=False, report=True):
+                device=0, orientations=(0,), normalization='unit', write_dir=None, write_probs=False, labels=None,
+                val_file=None, classes_of_interest=(0, 1), hausdorff=False, report=True):
     """
     Segment a 3D image using a specific network
 
@@ -721,6 +727,7 @@ def segment_ram(data, net, input_shape, in_channels=1, batch_size=1, step_size=N
     :param orientations: list of orientations to perform segmentation: 0-Z, 1-Y, 2-X (only for 2D based segmentation)
     :param normalization: type of data normalization (unit, z or minmax)
     :param write_dir: destination for the segmentation, set this equal to None, in which case only validation will be performed
+    :param write_probs: flag that specifies whether to write probabilities, instead of thresholding
     :param labels: directory that contains a 3D array (Z, Y, X) representing the 3D labels
     :param val_file: destination of the validation file (only required if labels is not None)
     :param classes_of_interest: index of the label of interest (required if labels is not None or write_dir is not None)
@@ -736,7 +743,7 @@ def segment_ram(data, net, input_shape, in_channels=1, batch_size=1, step_size=N
 
     # write out the segmentation if necessary
     if write_dir is not None:
-        write_segmentation(segmentation, write_dir, classes_of_interest=classes_of_interest)
+        write_segmentation(segmentation, write_dir, classes_of_interest=classes_of_interest, write_probs=write_probs)
 
     # validate the segmentation if necessary
     if labels is not None:
@@ -786,8 +793,8 @@ def segment(data, net, input_shape, in_channels=1, batch_size=1, step_size=None,
 
 
 def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(0, 1), batch_size=1, write_dir=None,
-             val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit', hausdorff=False,
-             report=True):
+             write_probs=False, val_file=None, track_progress=False, device=0, orientations=(0,), normalization='unit',
+             hausdorff=False, report=True):
     """
     Validate a network on a dataset and its labels
 
@@ -799,6 +806,7 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     :param classes_of_interest: index of the label of interest (length should match the amount of network output channels)
     :param batch_size: batch size for processing
     :param write_dir: optionally, specify a directory to write the output
+    :param write_probs: flag that specifies whether to write probabilities, instead of thresholding
     :param val_file: optionally, specify a file to write the validation results
     :param track_progress: optionally, for tracking progress with progress bar
     :param device: GPU device where the computations should occur
@@ -810,15 +818,15 @@ def validate(net, data, labels, input_size, in_channels=1, classes_of_interest=(
     """
 
     if data.__class__ == str:
-        js, ams = segment_read(data, net, input_size, write_dir=write_dir, in_channels=in_channels,
-                               batch_size=batch_size, track_progress=track_progress, device=device,
-                               orientations=orientations, normalization=normalization, labels=labels, val_file=val_file,
-                               classes_of_interest=classes_of_interest, report=report)
+        js, ams = segment_read(data, net, input_size, write_dir=write_dir, write_probs=write_probs,
+                               in_channels=in_channels, batch_size=batch_size, track_progress=track_progress,
+                               device=device, orientations=orientations, normalization=normalization, labels=labels,
+                               val_file=val_file, classes_of_interest=classes_of_interest, report=report)
     else:
-        segmentation, js, ams = segment_ram(data, net, input_size, write_dir=write_dir, in_channels=in_channels,
-                                            batch_size=batch_size, track_progress=track_progress, device=device,
-                                            orientations=orientations, normalization=normalization, labels=labels,
-                                            val_file=val_file, classes_of_interest=classes_of_interest,
-                                            hausdorff=hausdorff, report=report)
+        segmentation, js, ams = segment_ram(data, net, input_size, write_dir=write_dir, write_probs=write_probs,
+                                            in_channels=in_channels, batch_size=batch_size,
+                                            track_progress=track_progress, device=device, orientations=orientations,
+                                            normalization=normalization, labels=labels, val_file=val_file,
+                                            classes_of_interest=classes_of_interest, hausdorff=hausdorff, report=report)
 
     return js, ams
