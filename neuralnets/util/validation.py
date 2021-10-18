@@ -473,7 +473,7 @@ def write_segmentation(segmentation, write_dir, classes_of_interest=(0, 1), inde
     mkdir(write_dir)
     if write_probs:
         for i, c in enumerate(classes_of_interest):
-            class_dir = os.path.join(write_dir, c)
+            class_dir = os.path.join(write_dir, str(c))
             mkdir(class_dir)
             write_volume(segmentation[i] * 255, class_dir, index_inc=index_inc, type='pngseq')
     else:
