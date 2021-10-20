@@ -599,7 +599,7 @@ def pad(x, target_shape, mode='constant'):
     diff_2 = diff // 2
     padding_sz = [(d, t-d) for d, t in zip(diff_2, diff)]
     padding_sz.reverse()
-    padding_sz = tuple(np.concatenate(padding_sz, dtype=int))
+    padding_sz = tuple(np.concatenate(padding_sz).astype(int))
 
     return F.pad(x, padding_sz, mode=mode)
 
