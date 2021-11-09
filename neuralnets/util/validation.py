@@ -500,18 +500,13 @@ def _validate_ram(segmentation, labels, classes_of_interest=(0, 1), hausdorff=Fa
     w = None if all_labeled else labels != 255
     comp_hausdorff = all_labeled and hausdorff
 
-    # remap labels
-    predictions = [None] * 255
-    for i in range(segmentation.shape[0]):
-        predictions[classes_of_interest[i]] = segmentation[i]
-
     # compute metrics
-    js = np.asarray([iou(labels == c, predictions[c], w=w) for c in classes_of_interest])
-    ams = np.asarray([accuracy_metrics(labels == c, predictions[c], w=w) for c in classes_of_interest])
+    js = np.asarray([iou(labels == i, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
+    ams = np.asarray([accuracy_metrics(labels == i, segmentation[i], w=w) for i, c in enumerate(classes_of_interest)])
     hs = np.zeros_like(js)
-    for c in classes_of_interest:
+    for i, c in enumerate(classes_of_interest):
         if comp_hausdorff:
-            hs[i] = hausdorff_distance(labels == c, predictions[i])[0]
+            hs[i] = hausdorff_distance(labels == i, segmentation[i])[0]
         else:
             hs[i] = -1
 
