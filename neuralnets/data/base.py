@@ -323,7 +323,8 @@ class SlidingWindowDataset(data.Dataset):
                 self.data[i] = F.interpolate(data_it, scale_factor=scale_factor, mode='bilinear')[0, 0, ...].numpy()
 
         # pad data so that the dimensions are a multiple of the inputs shapes
-        self.data = [pad2multiple(d, input_shape, value=0) for d in self.data]
+        if input_shape is not None:
+            self.data = [pad2multiple(d, input_shape, value=0) for d in self.data]
 
         # compute size of the data
         self.n_samples_dim = np.zeros((len(self.data), 3), dtype=int)

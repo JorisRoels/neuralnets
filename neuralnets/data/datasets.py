@@ -830,7 +830,8 @@ class LabeledSlidingWindowDataset(SlidingWindowDataset):
                 self.labels[i] = _select_labels(self.labels[i], frac=self.partial_labels)
 
         # pad data so that the dimensions are a multiple of the inputs shapes
-        self.labels = [pad2multiple(l, input_shape, value=255) for l in self.labels]
+        if input_shape is not None:
+            self.labels = [pad2multiple(l, input_shape, value=255) for l in self.labels]
 
         # pad data so that additional channels can be sampled
         self.labels = [pad_channels(l, in_channels=in_channels, orientations=self.orientations) for l in self.labels]
