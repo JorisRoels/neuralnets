@@ -284,7 +284,7 @@ class SlidingWindowDataset(data.Dataset):
                 self.data.append(load_data(data_i, data_type=type, dtype=dtype))
         else:
             raise ValueError('SlidingWindowDataset requires data in str, np.ndarray or list format')
-        self.input_shape = input_shape
+        self.input_shape = input_shape if input_shape is not None else (1, 1, 1)
         self.scaling = scaling
         self.in_channels = int(in_channels)
         if isinstance(orientations, str):
