@@ -49,10 +49,11 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, epochs=10, gpus=(0,), accelerator='dp', log_dir='logs', log_freq=50, log_refresh_rate=None,
                  train_batch_size=1, test_batch_size=1, num_workers=1, device=0, orientations=(0,),
-                 normalization='unit', transform=None):
+                 normalization='unit', transform=None, len_epoch=1000):
 
         # trainer parameters
         self.epochs = epochs
+        self.len_epoch = len_epoch
         self.gpus = gpus
         self.accelerator = accelerator
         self.log_dir = log_dir
@@ -132,11 +133,12 @@ class UNet2DClassifier(PLClassifier):
                  train_batch_size=1, test_batch_size=1, num_workers=1, device=0, orientations=(0,),
                  normalization='unit', transform=None, input_shape=(1, 256, 256), in_channels=1, coi=(0, 1),
                  feature_maps=64, levels=4, skip_connections=True, residual_connections=False, norm='instance',
-                 activation='relu', dropout=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3):
+                 activation='relu', dropout=0.0, loss_fn=CrossEntropyLoss(), lr=1e-3, len_epoch=1000):
         super().__init__(epochs=epochs, gpus=gpus, accelerator=accelerator, log_dir=log_dir, log_freq=log_freq,
                          log_refresh_rate=log_refresh_rate, train_batch_size=train_batch_size,
                          test_batch_size=test_batch_size, num_workers=num_workers, device=device,
-                         orientations=orientations, normalization=normalization, transform=transform)
+                         orientations=orientations, normalization=normalization, transform=transform,
+                         len_epoch=len_epoch)
 
         # parameters
         self.input_shape = input_shape
