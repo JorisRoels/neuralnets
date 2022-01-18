@@ -1,6 +1,5 @@
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import pytorch_lightning as pl
-from pytorch_lightning.metrics.functional import iou
 import os
 
 from neuralnets.networks.blocks import *
