@@ -739,6 +739,11 @@ class UNet(pl.LightningModule):
                 y = y[:, 0, s, :, :]
             y_ = np.argmax(y_pred[:, :, s].detach().cpu().numpy(), axis=1)
 
+        # renormalize if necessary
+        if x.min() < 0:
+            x = x - torch.min(x)
+            x = x / x.max()
+
         # overlay the image with the labels (boundary) and predictions (pixel-wise)
         x_ = np.zeros((x.size(0), x.size(1), x.size(2), 3))
         for b in range(x.size(0)):
