@@ -283,6 +283,7 @@ def save(data, file):
 
 def mkdir(filename):
     if not os.path.exists(filename):
+        print_frm('    Making %s' % filename)
         os.mkdir(filename)
 
 
