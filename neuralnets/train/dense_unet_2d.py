@@ -100,11 +100,14 @@ if __name__ == '__main__':
         Validate the network
     """
     print_frm('Validating the network')
+    print_frm('Validating the network')
     net.load_state_dict(torch.load(trainer.checkpoint_callback.best_model_path)['state_dict'])
-    validate(net, test.data[0], test.get_original_labels()[0], params['input_size'], in_channels=params['in_channels'],
-             classes_of_interest=params['coi'], batch_size=params['test_batch_size'],
-             write_dir=os.path.join(params['log_dir'], 'test_segmentation'), track_progress=True,
-             device=params['gpus'][0])
+    for d in range(len(test.data)):
+        print_frm('  Dataset %s' % (params['data'] if type(params['data']) == str else params['data'][d]))
+        validate(net, test.data[d], test.get_original_labels()[d], params['input_size'], in_channels=params['in_channels'],
+                 classes_of_interest=params['coi'], batch_size=params['test_batch_size'],
+                 write_dir=os.path.join(params['log_dir'], 'test_segmentation_' + str(d)), track_progress=True,
+                 device=params['gpus'][0])
 
     """
         Clean up
