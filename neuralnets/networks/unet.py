@@ -1,3 +1,4 @@
+import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import pytorch_lightning as pl
 import os
@@ -589,15 +590,21 @@ class UNet(pl.LightningModule):
         else:
             return outputs
 
-    def training_step(self, batch, batch_idx):
+    def base_step(self, batch, batch_idx, phase='train'):
 
         # transfer to suitable device and get labels
-        if self.train_dataloader.dataloader.dataset.weight_balancing is not None:
+        data_loaders = {'train': self.train_dataloader, 'val': self.val_dataloader, 'test': self.test_dataloader}
+        if data_loaders[phase].dataloader.dataset.weight_balancing is not None:
             x, y, w = batch
             w = w[:, 0, ...]
         else:
             x, y = batch
             w = None
+
+        # if a list of samples are provided, concatenate them
+        if type(x) == list:
+            x = torch.cat(x, dim=0)
+            y = torch.cat(y, dim=0)
 
         # forward prop
         y_pred = self(x)
@@ -608,66 +615,24 @@ class UNet(pl.LightningModule):
 
         # compute iou
         mIoU = self._mIoU(y_pred, y)
-        self.log('train/mIoU', mIoU, prog_bar=True)
-        self.log('train/loss', loss)
+        self.log(phase + '/mIoU', mIoU, prog_bar=True)
+        self.log(phase + '/loss', loss)
 
         # log images
-        if batch_idx == self.train_batch_id:
-            self._log_predictions(x, y, y_pred, prefix='train')
+        if phase == 'train' or phase == 'val':
+            if batch_idx == self.train_batch_id:
+                self._log_predictions(x, y, y_pred, prefix=phase)
 
         return loss
+
+    def training_step(self, batch, batch_idx):
+        return self.base_step(batch, batch_idx, phase='train')
 
     def validation_step(self, batch, batch_idx):
-
-        # transfer to suitable device and get labels
-        if self.val_dataloader.dataloader.dataset.weight_balancing is not None:
-            x, y, w = batch
-            w = w[:, 0, ...]
-        else:
-            x, y = batch
-            w = None
-
-        # forward prop
-        y_pred = self(x)
-
-        # compute loss
-        loss = self.loss_fn(y_pred, y[:, 0, ...], w=w)
-        y_pred = torch.softmax(y_pred, dim=1)
-
-        # compute iou
-        mIoU = self._mIoU(y_pred, y)
-        self.log('val/mIoU', mIoU, prog_bar=True)
-        self.log('val/loss', loss)
-
-        # log images
-        if batch_idx == self.val_batch_id:
-            self._log_predictions(x, y, y_pred, prefix='val')
-
-        return loss
+        return self.base_step(batch, batch_idx, phase='val')
 
     def test_step(self, batch, batch_idx):
-
-        # transfer to suitable device and get labels
-        if self.test_dataloader.dataloader.dataset.weight_balancing is not None:
-            x, y, w = batch
-            w = w[:, 0, ...]
-        else:
-            x, y = batch
-            w = None
-
-        # forward prop
-        y_pred = self(x)
-
-        # compute loss
-        loss = self.loss_fn(y_pred, y[:, 0, ...], w=w)
-        y_pred = torch.softmax(y_pred, dim=1)
-
-        # compute iou
-        mIoU = self._mIoU(y_pred, y)
-        self.log('test/mIoU', mIoU, prog_bar=True)
-        self.log('test/loss', loss)
-
-        return loss
+        return self.base_step(batch, batch_idx, phase='test')
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)

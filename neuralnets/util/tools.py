@@ -1,11 +1,10 @@
 import random
 
-import numpy as np
-import torch
 import torch.nn.functional as F
 import torchvision.utils as vutils
 
 from neuralnets.util.io import read_volume, mkdir
+from neuralnets.util.augmentation import *
 
 from scipy.ndimage.morphology import binary_opening
 from torch.utils.tensorboard import SummaryWriter
@@ -128,6 +127,36 @@ def gaussian_window(size, sigma=1):
     return gw
 
 
+def get_transforms(tfs, coi=None):
+    """
+    Builds a transform object based on a list of desired augmentations
+
+    :param tfs: list of augmentations, options: rot90, flipx, flipy, contrast, deformation, noise
+    :param coi: classes of interest (only required if deformations are included)
+    :return: transform object that implements the desired augmentations
+    """
+
+    # dictionary that maps augmentation strings to transform objects
+    mapper = {'rot90': Rotate90(),
+              'flipx': Flip(prob=0.5, dim=0),
+              'flipy': Flip(prob=0.5, dim=1),
+              'contrast': ContrastAdjust(adj=0.1),
+              'deformation': RandomDeformation(),
+              'noise': AddNoise(sigma_max=0.05)}
+
+    # build the transforms
+    tf_list = []
+    for key in mapper:
+        if key in tfs:
+            tf_list.append(mapper[key])
+
+    # required post-processing
+    if 'deformation' in tfs:
+        tf_list.append(CleanDeformedLabels(coi))
+
+    return Compose(tf_list)
+
+
 def parse_params(params):
     """
     Parse a YAML parameter dictionary
@@ -138,8 +167,14 @@ def parse_params(params):
 
     keys = params.keys()
 
+    for p in ['data', 'labels']:
+        if p in keys:
+            if ',' in params[p]:
+                params[p] = params[p].split(',')
     if 'input_size' in keys:
         params['input_size'] = [int(item) for item in params['input_size'].split(',')]
+    if 'len_epoch' not in keys:
+        params['len_epoch'] = None
     if 'coi' in keys:
         params['coi'] = [int(c) for c in params['coi'].split(',')]
     if 'orientations' in keys:
@@ -147,6 +182,10 @@ def parse_params(params):
             params['orientations'] = [params['orientations']]
         else:
             params['orientations'] = [int(c) for c in params['orientations'].split(',')]
+    if 'augmentation' in keys:
+        params['augmentation'] = params['augmentation'].split(',')
+    else:
+        params['augmentation'] = 'rot90,flipx,flipy,contrast,noise'.split(',')
     if 'gpus' in keys:
         if type(params['gpus']) is int:
             params['gpus'] = [params['gpus']]
