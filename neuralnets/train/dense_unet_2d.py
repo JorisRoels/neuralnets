@@ -100,7 +100,6 @@ if __name__ == '__main__':
         Validate the network
     """
     print_frm('Validating the network')
-    print_frm('Validating the network')
     net.load_state_dict(torch.load(trainer.checkpoint_callback.best_model_path)['state_dict'])
     for d in range(len(test.data)):
         print_frm('  Dataset %s' % (params['data'] if type(params['data']) == str else params['data'][d]))
