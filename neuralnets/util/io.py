@@ -1,5 +1,5 @@
 import os
-
+import shutil
 import cv2
 import h5py
 import numpy as np
@@ -283,8 +283,23 @@ def save(data, file):
 
 def mkdir(filename):
     if not os.path.exists(filename):
-        print_frm('    Making %s' % filename)
+        print_frm('Making %s' % filename)
         os.mkdir(filename)
+
+
+def rmdir(dir):
+    print_frm('Removing %s' % dir)
+    shutil.rmtree(dir, ignore_errors=True)
+
+
+def cp(source, target):
+    print_frm('Copying %s -> %s' % (source, target))
+    shutil.copyfile(source, target)
+
+
+def mv(source, target):
+    print_frm('Moving %s -> %s' % (source, target))
+    shutil.move(source, target)
 
 
 def print_frm(s, time=True, flush=True):
