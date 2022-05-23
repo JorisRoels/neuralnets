@@ -6,6 +6,7 @@ import numpy as np
 import tifffile as tiff
 import datetime
 import pickle
+import ncempy.io as nio
 
 from tqdm import tqdm
 
@@ -94,6 +95,19 @@ def read_hdf5(file, dtype='uint8', key=None):
     return data
 
 
+def read_dm3(file, dtype='uint8'):
+    """
+    Read a DM3 file
+
+    :param file: file to be read
+    :param dtype: data type of the output
+    """
+
+    data = nio.read(file)['data'].astype(dtype)
+
+    return data
+
+
 def read_png(file, dtype='uint8'):
     """
     Read a 2D PNG file
@@ -120,6 +134,30 @@ def read_jpg(file, dtype='uint8'):
     return data
 
 
+def read_dm3seq(dir, dtype='uint8', start=0, stop=-1, progress=False):
+    """
+    Read a sequence of DM3 files
+
+    :param dir: directory that contains the files
+    :param dtype: data type of the output
+    :param start: first slice to read
+    :param stop: last slice (exclusive) to read (-1 means it will read up to the final slice)
+    :param progress: show a progress bar
+    """
+
+    files = os.listdir(dir)
+    files.sort()
+    sz = read_dm3(os.path.join(dir, files[0]), dtype=dtype).shape
+    if stop < 0:
+        stop = len(files)
+    data = np.zeros((stop - start, sz[0], sz[1]), dtype=dtype)
+    rng = tqdm(range(start, stop)) if progress else range(start, stop)
+    for i in rng:
+        data[i - start] = read_dm3(os.path.join(dir, files[i]), dtype=dtype)
+
+    return data
+
+
 def read_pngseq(dir, dtype='uint8', start=0, stop=-1, progress=False):
     """
     Read a sequence of 2D PNG files
@@ -133,13 +171,13 @@ def read_pngseq(dir, dtype='uint8', start=0, stop=-1, progress=False):
 
     files = os.listdir(dir)
     files.sort()
-    sz = cv2.imread(os.path.join(dir, files[0]), cv2.IMREAD_ANYDEPTH).shape
+    sz = read_png(os.path.join(dir, files[0]), dtype=dtype).shape
     if stop < 0:
         stop = len(files)
     data = np.zeros((stop - start, sz[0], sz[1]), dtype=dtype)
     rng = tqdm(range(start, stop)) if progress else range(start, stop)
     for i in rng:
-        data[i - start] = cv2.imread(os.path.join(dir, files[i]), cv2.IMREAD_ANYDEPTH).astype(dtype)
+        data[i - start] = read_png(os.path.join(dir, files[i]), dtype=dtype)
 
     return data
 
