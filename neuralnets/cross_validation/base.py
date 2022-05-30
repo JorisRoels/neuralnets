@@ -77,7 +77,6 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
         self.trainer = None
         self.model = None
 
-
     def fit(self, X, y):
 
         # construct dataloader
@@ -90,7 +89,6 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
 
         return self
 
-
     def predict(self, X, y):
 
         segmentation = self.model.segment(X, self.model, self.model.input_shape, in_channels=self.model.in_channels,
@@ -98,7 +96,6 @@ class PLClassifier(BaseEstimator, ClassifierMixin):
                                           orientations=self.orientations, normalization=self.normalization)
 
         return segmentation
-
 
     def score(self, X, y, sample_weight=None):
 
@@ -154,7 +151,6 @@ class UNet2DClassifier(PLClassifier):
         self.loss_fn = loss_fn
         self.lr = lr
 
-
     def fit(self, X, y):
 
         # initialize model and trainer
@@ -204,7 +200,6 @@ class UNet3DClassifier(PLClassifier):
         self.coi = coi
         self.loss_fn = loss_fn
         self.lr = lr
-
 
     def fit(self, X, y):
 

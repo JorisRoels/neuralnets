@@ -334,7 +334,7 @@ def boundary_weight_map(labels, sigma=20, w0=1):
     :param labels: input tensor
     :param optional sigma: damping parameter
     :param optional w0: initial value of the weight map
-    :return boundary weight map as a tensor
+    :return: boundary weight map as a tensor
     """
 
     y = labels.cpu().numpy()

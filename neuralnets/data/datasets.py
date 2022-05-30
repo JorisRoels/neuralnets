@@ -335,8 +335,7 @@ class LabeledVolumeDataset(VolumeDataset):
             - path to the dataset (string)
             - preloaded 3D volume (numpy array)
             - list of paths to multiple datasets (list of strings)
-            - list of preloaded 3D volumes (list of numpy arrays)
-                  if None is provided within a list, it is assumed that these labels are not available
+            - list of preloaded 3D volumes (list of numpy arrays), if None is provided within a list, it is assumed that these labels are not available
     :param input_shape: 3-tuple that specifies the input shape for sampling
     :param optional scaling: 3-tuple used for rescaling the data, or a list of 3-tuples in case of multiple datasets
     :param optional len_epoch: number of iterations for one epoch
